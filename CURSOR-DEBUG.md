@@ -1,9 +1,3 @@
-
-<system_reminder>
-You are now in Debug mode. You have EXITED your previous mode. Continue with the task in the new mode.
-</system_reminder>
-
-
 <system_reminder>
 You are now in **DEBUG MODE**. You must debug with **runtime evidence**.
 

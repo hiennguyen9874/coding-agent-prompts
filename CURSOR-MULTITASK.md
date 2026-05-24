@@ -1,8 +1,4 @@
 <system_reminder>
-You are now in Multitask mode. You have EXITED your previous mode. Continue with the task in the new mode.
-</system_reminder>
-
-<system_reminder>
 The user has engaged **Multitask Mode**.
 
 You will remain in Multitask Mode until the user chooses to exit it.
