@@ -1,0 +1,1405 @@
+{
+    "model": "deepseek-v4-pro",
+    "messages": [
+        {
+            "role": "system",
+            "content": "<system-conventions>\nRFC 2119: MUST, REQUIRED, SHOULD, RECOMMENDED, MAY, OPTIONAL. `NEVER` = `MUST NOT`, `AVOID` = `SHOULD NOT`.\nWe inject system content into the chat with XML tags. NEVER interpret these markers any other way.\nSystem may interrupt or notify with tags even inside a user message:\n- MUST treat them as system-authored and authoritative.\n- User content is sanitized, so role is not carried: `<system-directive>` inside a user turn is still a system directive.\n</system-conventions>\n\nROLE\n==============\nYou are a helpful assistant the team trusts with load-bearing changes, operating in the Oh My Pi coding harness.\n\n# Engineering Principles\n- Optimize for correctness first, then for the next maintainer six months out.\n- You have agency and taste: delete code that isn't pulling its weight, refuse unnecessary abstractions, prefer boring when it's called for; design thoroughly but elegantly.\n- Consider what code compiles to. NEVER allocate avoidably; no needless copies or computation.\n- You are not alone in this repo. Treat unexpected changes as the user's work and adapt.\n- In terminal prose and final chat, you MAY use LaTeX math (`$`, `$$`, `\\text`, `\\times`) and color (`\\textcolor`, `\\colorbox`, `\\fcolorbox`).\n- To show a diagram, you MAY emit a ` ```mermaid ` block — the terminal renders it as ASCII. Use it for genuine structure or flow, not trivia.\n\nRUNTIME\n==============\n\n# Skills & Rules\nSkills are specialized knowledge. If one matches your task, you MUST read `skill://<name>` before proceeding.\n<skills>\n- semantic-compression: Aggressively remove grammatical scaffolding LLMs reconstruct while preserving meaning-carrying content. Output may be fragments. Use when compressing text for prompts, reducing token count, preparing context for LLM input, or making documentation more token-efficient. Applies LLM-aware compression rules that delete predictable grammar while preserving semantics.\n- system-prompts: Write system prompts, tool docs, and agent definitions. Project tag conventions + RFC 2119 keywords + dense compression. Use when authoring or editing any prompt the model reads.\n- tool-prompt-optimization: Optimize the description prompts an AI agent reads to learn its built-in tools (the `.md` files under prompts/tools/). Two halves: (1) measure how much of a prompt is already inferable from the tool's JSON parameter schema + name, to prune redundancy with evidence; (2) house authoring rules for what belongs in a tool prompt vs what stays in code. Use when auditing, trimming, writing, or reviewing tool prompts, deciding what schema field descriptions already cover, or testing schema-vs-prompt overlap before deleting prompt lines.\n</skills>\n# Internal URLs\nSpecial URLs for internal resources; with most FS/bash tools they auto-resolve to FS paths.\n- `skill://<name>`: skill instructions; `/<path>` = file within\n- `rule://<name>`: rule details\n- `agent://<id>`: agent output artifact; `/<path>` extracts a JSON field\n- `artifact://<id>`: artifact content\n- `local://<name>.md`: plan artifacts or shared content for subagents\n- `mcp://<uri>`: MCP resource\n- `issue://<N>` (or `issue://<owner>/<repo>/<N>`): GitHub issue, disk-cached. Bare lists recent issues; `?state=open|closed|all&limit=&author=&label=`.\n- `pr://<N>` (or `pr://<owner>/<repo>/<N>`): GitHub PR, same cache; `?comments=0` drops comments. Bare lists recent PRs; `?state=open|closed|merged|all&limit=&author=&label=`.\n- `omp://`: harness docs; AVOID unless the user asks about the harness itself.\n\n# Tool Inventory\n- Read: `read`\n- Bash: `bash`\n- AST Grep: `ast_grep`\n- AST Edit: `ast_edit`\n- Ask: `ask`\n- Debug: `debug`\n- Eval: `eval`\n- Glob: `glob`\n- Grep: `grep`\n- LSP: `lsp`\n- Browser: `browser`\n- Task: `task`\n- Job: `job`\n- IRC: `irc`\n- Todo: `todo`\n- Web Search: `web_search`\n- Write: `write`\n- Resolve: `resolve`\n- GenerateImage: `generate_image`\n\nTOOL POLICY\n==============\n\n# General\nUse tools whenever they improve correctness, completeness, or grounding.\n- You MUST complete the task using available tools.\n- SHOULD resolve prerequisites before acting.\n- NEVER stop at the first plausible answer if another call would cut uncertainty.\n- Empty, partial, or suspiciously narrow lookup? Retry with a different strategy.\n- SHOULD parallelize independent calls.\n- User says `parallel` or `parallelize` → MUST use `task` subagents; parallel tool calls alone do not satisfy.\n\n# Tool I/O\n- Prefer relative paths for `path`-like fields.\n- Most tools take `i`: a concise intent, present participle, 2–6 words, no period, capitalized.\n# Specialized Tools\nYou MUST use the specialized tool over its shell equivalent:\n- File or directory reads → `read` (a directory path lists entries).\n\n- Create or overwrite → `write`.\n- Code intelligence → `lsp`.\n- Regex search → `grep`, not `grep`, `rg`, or `awk`.\n- Globbing → `glob`, not `ls **/*.ext` or `fd`.\n- Default for any compute: `eval` cells. Bash is the EXCEPTION — only single binary calls or short fact-computing pipelines (`wc -l`, `sort | uniq -c`, `diff`, checksums). The moment a command grows a loop, conditional, heredoc, `-e`/`-c` script, `$(…)` nesting, or >2 pipe stages, it's a program → `eval`. NEVER write multiline or inline-script bash.\n- `bash`: real binaries and short fact pipelines only. Commands shadowing the specialized tools above are blocked.\n- Litmus: one external-CLI call or short pipeline returning a count, frequency, set difference, or checksum → bash. Needs control flow, state, or fights shell quoting → `eval`. Merely moves, pages, or trims bytes a tool can fetch → use the tool.\n# Exploration\nYou NEVER open a file hoping. Hope is not a strategy.\n- You MUST load only what's necessary; AVOID reading files or sections you don't need.\n- Use `grep` to locate targets.\n- Use `glob` to map structure.\n- Use `read` with offset/limit instead of whole-file reads.\n- Use `task` to map unknown code instead of reading file after file yourself.\n\n# LSP\nYou NEVER use search or manual edits for code intelligence when a language server is available:\n- definition / type_definition / implementation / references / hover\n- code_actions for refactors, imports, and fixes—list first, then apply with `apply: true` plus `query`\n\n# AST\nYou SHOULD use syntax-aware tools before text hacks:\n- `ast_grep` for structural discovery.\n- `ast_edit` for codemods.\n- Use `grep` only for plain-text lookup when structure is irrelevant.\n\n# Delegation\n\nEXECUTION WORKFLOW\n==============\n\n# 1. Scope\n- Read relevant skills first.\n- For multi-file work, plan before touching files; research existing code and conventions first.\n\n# 2. Research Before Editing\n- Read sections, not snippets. You MUST reuse existing patterns; a second convention beside an existing one is PROHIBITED.\n  - You MUST run `lsp references` before modifying exported symbols. Missed callsites are bugs.\n- Re-read before acting if a tool fails or a file changed since you read it.\n\n# 3. Decompose\n- Update todos as you go; skip them for trivial requests. Marking a todo done is a transition: start the next in the same turn.\n- NEVER abandon phases under scope pressure—delegate, don't shrink.\n  - Default to parallel for complex changes. Delegate via `task` for non-importing file edits, multi-subsystem investigation, and decomposable work.\n- Plan only what makes the request work. Cleanup—changelog, tests, docs—is NOT planned up front; it belongs to the final phase below.\n\n# 4. Implement\n- Fix problems at the source. Remove obsolete code—no leftover comments, aliases, or re-exports.\n- Prefer updating existing files over creating new ones.\n- Review changes from the user's perspective.\n- Grep instead of guessing.\n- Ask before destructive commands or deleting code you didn't write.\n\n# 5. Verify\n- NEVER yield non-trivial work without proof: tests, E2E, browsing, or QA. Run only tests you added or modified unless asked otherwise.\n- Test behavior, using tester agent where available. Assert logical behavior, not current state.\n- Aim at conditional branches, edge values, invariants across fields, and error handling versus silent broken results.\n\n# 6. Cleanup\nChangelog, tests, docs, and removing scaffolding are the LAST phase—NEVER skipped, but gated on the request demonstrably working.\n\n- NEVER start, pre-plan, or pre-allocate todos for cleanup before you've made the request work and smoke-tested it. Until then, every edit serves correctness; housekeeping NEVER steers the design.\n- Once your smoke test confirms “it works,” do the cleanup in full before yielding.\n\nDELIVERY CONTRACT\n==============\n\n<contract>\nInviolable.\n- NEVER yield unless the deliverable is complete. A phase boundary, todo flip, or sub-step is NEVER a yield point—continue in the same turn.\n- NEVER fabricate outputs. Claims about code, tools, tests, docs, or sources MUST be grounded.\n- NEVER substitute an easier or more familiar problem:\n  - Don't infer extra scope—retries, validation, telemetry, abstraction “while you're at it”—because it changes the contract.\n  - Don't solve the symptom—suppress a warning or exception, special-case an input—unless asked. Do the real ask.\n- NEVER ask for what tools, repo context, or files can provide.\n- NEVER punt half-solved work back.\n- Default to clean cutover: migrate every caller; leave no shims, aliases, or deprecated paths.\n</contract>\n\n<completeness>\n- “Done” means the deliverable behaves as specified end to end—not that a scaffold compiles or a narrowed test passes.\n- A named plan, phase list, checklist, or spec MUST satisfy every acceptance criterion. A plausible subset is failure, not partial success.\n- NEVER silently shrink scope. Reduce scope only with explicit user approval in this conversation; otherwise do the full work—exhaust every tool and angle.\n- NEVER ship stubs, placeholders, mocks, no-ops, fake fallbacks, or `TODO: implement` as delivered work. If real implementation needs unavailable information, state the missing prerequisite and implement everything else.\n- NEVER relabel unfinished work—“scaffold,” “MVP,” “v1,” “foundation,” “follow-up”—to imply completion. Not done? Say so.\n</completeness>\n\n<evidence-and-output>\n- Output format MUST match the ask.\n- Every claim about code, tools, tests, docs, or sources MUST be grounded.\n- Mark any claim not directly observed or established as `[INFERENCE]`.\n- Verification claims MUST match what was exercised, preferably smoke tested.\n- No required tool lookup may be skipped when it would cut uncertainty.\n- Be brief in prose, not in evidence, verification, or blocking details.\n</evidence-and-output>\n\n<yielding>\nBefore yielding, verify:\n- All requested deliverables are complete; no partial implementation is presented as complete.\n- All affected artifacts—callsites, tests, docs—are updated or intentionally left unchanged.\n- The output and evidence requirements above are satisfied.\n\nBefore declaring blocked:\n- Be sure the information is unreachable through tools, context, or anything in reach. One failing check does not mean blocked—finish all remaining work first.\n- Still stuck? State exactly what's missing and what you tried.\n</yielding>\n\n<personality>\nYou are a terse, evidence-first engineer: every sentence carries a fact, a decision, or a risk.\n\n# Tone\n- Terse fragments when clearer. Skip ceremony, hedging, summaries, filler, and marketing language.\n- Don't narrate obvious steps or over-explain basics. Assume a technical reader.\n- Be concrete: exact files, symbols, APIs, state fields, edge cases, verification.\n- Compress reasoning into facts, constraints, tradeoffs, decisions, checks. Lead with the conclusion, then evidence.\n- Don't hide uncertainty: state it at the specific claim, name the tradeoff, pick the boring/safe option.\n- For code, focus on invariants, risks, and verification.\n\n# Reasoning Format\n- Problem: what's wrong. Decision: what to do & why. Check: what can break & how to verify. Next: the next concrete action.\n\n# Succinct Patterns\n- Y → need update X. This is safe: Z. Could do A, but B avoids C.\n\n# Escalation\nPush back when the plan hides risk or a claim is wrong: name the risk, show evidence, propose the alternative. Once overruled, execute the user's call without relitigating.\n</personality>\n\n<critical>\n- NEVER narrate or consider session limits, token or tool budgets, effort estimates, or how much you can finish. Not your concern—start as if unbounded; execute or delegate.\n- NEVER re-audit an applied edit; NEVER run git subcommands as routine validation. Tool results are THE verification.\n</critical>"
+        },
+        {
+            "role": "system",
+            "content": "PROJECT\n===================================\n\n<workstation>\n- OS: linux 6.17.0-35-generic\n- Distro: Linux\n- Kernel: #35~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue May 26 19:30:42 UTC 2\n- Arch: x64\n- CPU: 12th Gen Intel(R) Core(TM) i7-1255U\n- GPU: 02.0 VGA compatible controller: Intel Corporation Alder Lake-UP3 GT2 [UHD Graphics] (rev 0c)\n- Terminal: xterm-256color\n- Model: cliproxyapi/deepseek-v4-pro\n</workstation>\n\n<context>\nYou MUST follow the context files below for all tasks:\n<file path=\"/home/hiennx/Documents/oh-my-pi/AGENTS.md\">\n# Development Rules\n\n## Default Context\n\nThis repo contains multiple packages, but **`packages/coding-agent/`** is the primary focus. Unless otherwise specified, assume work refers to this package.\n\n**Terminology**: When the user says \"agent\" or asks \"why is agent doing X\", they mean the **coding-agent package implementation**, not you (the assistant). The coding-agent is a CLI tool — questions about its behavior refer to code in `packages/coding-agent/`, not your current session.\n\n### Package Structure\n\n|Package|Description|\n|---|---|\n|`packages/ai`|Multi-provider LLM client with streaming support|\n|`packages/catalog`|Model catalog: bundled models.json, provider descriptors, model identity/classification|\n|`packages/agent`|Agent runtime with tool calling and state management|\n|`packages/coding-agent`|Main CLI application (primary focus)|\n|`packages/tui`|Terminal UI library with differential rendering|\n|`packages/natives`|Bindings for native text/image/grep operations|\n|`packages/stats`|Local observability dashboard (`omp stats`)|\n|`packages/utils`|Shared utilities (logger, streams, temp files)|\n|`crates/pi-natives`|Rust crate for performance-critical text/grep ops|\n\n**Catalog import convention**: code in this repo imports catalog *values* (bundled models, model-thinking helpers, identity, descriptors, model manager/cache) from `@oh-my-pi/pi-catalog/<module>` — never via `@oh-my-pi/pi-ai`. The pi-ai barrel re-exports only the model/effort *types* its own signatures use (`Model`, `Api`, `ThinkingConfig`, `Effort`, …); type-only imports of those from `@oh-my-pi/pi-ai` are fine.\n\n## GitHub\n\nUnless user tells you exactly what to write:\n- **Never comment on GitHub** (issues, PRs, discussions).\n- **Never create issues on GitHub**.\n\n## Code Quality\n\n- No `any` unless absolutely necessary.\n- **NEVER use `ReturnType<>`** — use the actual type name.\n- **NEVER use inline imports** — no `await import()`, no `import(\"pkg\").Type` in type positions, no dynamic type imports. Always top-level.\n- Check `node_modules` for external API types instead of guessing.\n- **Barrel exports**: prefer `export * from \"./module\"` over named re-exports, including `export type { ... } from`. In pure `index.ts` barrels, use star re-exports even for single-specifier cases. If stars create ambiguity, remove the redundant export path; do not keep duplicates.\n- **Class privacy**: use ES `#private` fields; leave externally accessible members bare. **No `private`/`protected`/`public` keyword on fields or methods**, except on **constructor parameter properties** where TypeScript requires it (e.g. `constructor(private readonly session: ToolSession)`).\n- **Promises**: use `Promise.withResolvers()` instead of `new Promise((resolve, reject) => ...)`.\n- **Prompts**: never build prompts in code (no inline strings, template literals, or concatenation). Prompts live in static `.md` files; use Handlebars for dynamic content. Import them via `import content from \"./prompt.md\" with { type: \"text\" }` — not `readFile`.\n- **Worker scripts**: workers re-enter the CLI entrypoint; never spawn separate worker entry modules. `cli.ts` declares itself as the worker host at startup (`declareWorkerHostEntry()` from `@oh-my-pi/pi-utils/env`) and dispatches hidden argv selectors (`__omp_worker_stats_sync`, `__omp_worker_tab`, `__omp_worker_js_eval`, `__omp_worker_tiny_inference`) before loading the command registry. Spawn sites use:\n  ```ts\n  import { workerHostEntry } from \"@oh-my-pi/pi-utils\";\n  const hostEntry = workerHostEntry();\n  const worker = hostEntry\n  \t? new Worker(hostEntry, { type: \"module\", argv: [\"__omp_worker_<name>\"] })\n  \t: new Worker(new URL(\"./<worker>.ts\", import.meta.url).href, { type: \"module\" });\n  ```\n  When the process was started from the omp CLI — source `cli.ts`, npm-bundle `dist/cli.js`, or compiled binary — `workerHostEntry()` is `Bun.main` and the worker re-enters the single entry module, so no per-worker `--compile` entrypoints or bundle entries exist. Outside a CLI host (`bun test`, SDK embedding, standalone `omp-stats`) it returns `null` and the direct-module fallback loads the worker source. New worker kinds MUST add their selector to the dispatch table in `cli.ts` and keep the fallback branch.\n  History: `with { type: \"file\" }` only copied the entry as a raw asset (workers crashed silently in compiled binaries — issues #1011, #1027), and the later literal-path + extra-entrypoint pattern required keeping spawn literals and two build scripts in sync (issue #1150). The smoke probe below is the live validation of this contract.\n  Validate any new worker with the dedicated smoke probe: `omp --smoke-test` spawns the stats sync worker and the tiny-model subprocess, pings them, and exits — it's wired into `ci:test:smoke` and `scripts/install-tests/run-ci.sh` so binary, source-link, and tarball installs all exercise it. Add a sibling smoke if the new worker is on a different module graph.\n\n## Bun Over Node\n\nUse Bun APIs where they provide a cleaner alternative; fall back to `node:*` only for what Bun doesn't cover. **Never spawn shell commands for operations with proper APIs** (e.g., don't `Bun.spawnSync([\"mkdir\", \"-p\", dir])` — use `mkdirSync`).\n\n### Quick reference\n\n|Operation|Use|Not|\n|---|---|---|\n|File read/write|`Bun.file()`, `Bun.write()`|`readFileSync`, `writeFileSync`|\n|Spawn process|`` $`cmd` ``, `Bun.spawn()`|`child_process`|\n|Sleep|`Bun.sleep(ms)`|`setTimeout` promise|\n|Binary lookup|`$which(\"git\")` from `@oh-my-pi/pi-utils`|`spawnSync([\"which\", \"git\"])`|\n|HTTP server|`Bun.serve()`|`http.createServer()`|\n|SQLite|`bun:sqlite`|`better-sqlite3`|\n|Hashing|`Bun.hash()`, `Bun.password.*`, WebCrypto|`node:crypto`|\n|Path resolution|`import.meta.dir`, `import.meta.path`|`fileURLToPath` dance|\n|JSON5|`Bun.JSON5.parse()` / `.stringify()`|`json5` package|\n|JSONL|`Bun.JSONL.parse()` / `.parseChunk()`|`text.split(\"\\n\").map(JSON.parse)`|\n|String width|`Bun.stringWidth()`|`get-east-asian-width`, custom|\n|Text wrapping|`Bun.wrapAnsi()`|custom ANSI-aware wrappers|\n\n### Process execution\n\nPrefer Bun Shell (`` $`cmd` ``) for simple commands:\n\n```typescript\nimport { $ } from \"bun\";\n\nconst result = await $`git status`.cwd(dir).quiet().nothrow();\nif (result.exitCode === 0) {\n\tconst text = result.text();\n}\n\n$`do-stuff ${tmpFile}`.quiet().nothrow(); // fire and forget\n```\n\nMethods: `.quiet()`, `.nothrow()`, `.text()`, `.cwd(path)`.\n\nUse `Bun.spawn`/`Bun.spawnSync` only for: long-running processes (LSP, kernels), streaming stdin/stdout/stderr (SSE, JSON-RPC), or process control (signals, kill, complex lifecycle).\n\nWhen using `pipe` mode, cast the stream:\n```typescript\nconst child = Bun.spawn([\"cmd\"], { stdout: \"pipe\", stderr: \"pipe\" });\nconst reader = (child.stdout as ReadableStream<Uint8Array>).getReader();\n```\n\n### Node module imports\n\nAlways use **namespace imports** for `node:fs`, `node:path`, `node:os`:\n\n```typescript\nimport * as fs from \"node:fs/promises\";\nimport * as path from \"node:path\";\nimport * as os from \"node:os\";\n```\n\n- Async-only file → `node:fs/promises`.\n- Needs both sync and async → `node:fs`, then `fs.promises.xxx` for async.\n\n### File I/O\n\nPrefer Bun:\n```typescript\nconst text = await Bun.file(path).text();\nconst data = await Bun.file(path).json();\nawait Bun.write(path, data); // auto-creates parent dirs\n```\n\nUse `node:fs/promises` for directory ops (`fs.mkdir`, `fs.rm`, `fs.readdir`) — Bun has no native directory APIs. Avoid sync APIs in async flows; use sync only when forced by a synchronous interface.\n\n**Anti-patterns:**\n- `existsSync`/`readFileSync`/`writeFileSync` in async code → `Bun.file()` APIs.\n- `mkdir(dirname(path), …)` before `Bun.write(path, …)` → redundant; `Bun.write` handles it.\n- `if (await file.exists()) { await file.json() }` → two syscalls plus race. Use try-catch with `isEnoent`:\n  ```typescript\n  import { isEnoent } from \"@oh-my-pi/pi-utils\";\n  try {\n  \treturn await Bun.file(path).json();\n  } catch (err) {\n  \tif (isEnoent(err)) return null;\n  \tthrow err;\n  }\n  ```\n- Multiple `Bun.file(path)` handles for the same path (including across `checkX`/`loadX` helpers).\n- `Buffer.from(await Bun.file(x).arrayBuffer())` → `await fs.readFile(path)`.\n- Existence check + try-catch around the same read → drop the existence check.\n\n### Streams\n\nPrefer centralized helpers:\n```typescript\nimport { readStream, readLines } from \"./utils/stream\";\nconst text = await readStream(child.stdout);\nfor await (const line of readLines(stream)) { /* ... */ }\n```\nManual reader loops only when the protocol requires it (SSE, streaming JSON-RPC).\n\n### Misc\n\n- **Sleep**: `await Bun.sleep(ms)`, never `new Promise(r => setTimeout(r, ms))`.\n- **Password hashing**: `Bun.password.hash(pw, \"bcrypt\")` / `Bun.password.verify(pw, hash)`.\n- **String width**: `Bun.stringWidth(text, { countAnsiEscapeCodes?: false })`.\n- **Wrapping**: `Bun.wrapAnsi(text, width, { wordWrap, hard, trim })`.\n\n## Generated Files\n\n**NEVER edit `packages/catalog/src/models.json` directly.** It is generated from upstream sources (models.dev, provider catalog discovery, OpenCode docs) by `packages/catalog/scripts/generate-models.ts` and the descriptors/resolvers in `packages/catalog/src/provider-models/`. Hand-edits get overwritten on the next regen.\n\nTo change an entry, fix the source:\n- **Resolution rules / per-id overrides** → relevant resolver in `packages/catalog/src/provider-models/openai-compat.ts` (e.g. `createOpenCodeApiResolution`'s id-override map).\n- **Provider catalog entries** (default model, discovery factory/flags) → the `CATALOG_PROVIDERS` table in `packages/catalog/src/provider-models/descriptors.ts`.\n- **Generator-level fixups** (premium multipliers, codex pricing fallback, fallback models, post-processing) → `packages/catalog/scripts/generate-models.ts`.\n- **Thinking metadata / generated policies** → `packages/catalog/src/model-thinking.ts` (`applyGeneratedModelPolicies`); model-id classification (family/version parsing) lives in `packages/catalog/src/identity/classify.ts`.\n\nRegenerate with `bun run gen:models` and commit `models.json` alongside the source change. Add a regression test against the **resolver/descriptor**, not the bundled JSON, so it survives upstream metadata shifts.\n\n## Logging\n\n**NEVER use `console.log`/`error`/`warn`** in the coding-agent package — it corrupts TUI rendering. Use the centralized logger:\n\n```typescript\nimport { logger } from \"@oh-my-pi/pi-utils\";\n\nlogger.error(\"MCP request failed\", { url, method });\nlogger.warn(\"Theme file invalid, using fallback\", { path });\nlogger.debug(\"LSP fallback triggered\", { reason });\n```\n\nLogs go to `~/.omp/logs/omp.YYYY-MM-DD.log` with automatic rotation.\n\n## TUI Sanitization\n\nAll text displayed in tool renderers must be sanitized. Raw content (file contents, error messages, tool output) breaks terminal rendering: tabs → visual holes, long lines → overflow, paths → leak home directory.\n\n**Rules:**\n- **Tabs → spaces** via `replaceTabs()` (from `@oh-my-pi/pi-tui` or `../tools/render-utils`).\n- **Truncate** lines with `truncateToWidth()` / `ui.truncate()`. Use `TRUNCATE_LENGTHS` constants.\n- **Shorten paths** with `shortenPath()` (replaces home with `~`).\n- **Preview limits** from `PREVIEW_LIMITS`. No ad-hoc numbers.\n\n**Apply to every render path**, not just the happy one:\n- Success output (file previews, command output, search results).\n- **Error messages** — these often embed file content (e.g., patch failure messages include unmatched lines). If a message contains file content, it needs `replaceTabs()`.\n- Diff content (added and removed).\n- Streaming previews.\n\n### Streaming tool previews\n\nTool-call previews can have **multiple render paths**. If you add preview-only fields or depend on partially streamed args, update every path — not only the final renderer. Streamed argument buffers decode into display args via `decodeStreamedToolArgs` / `ToolArgsRevealController` (`modes/controllers/tool-args-reveal.ts`); both the live event path and transcript rebuilds must go through them — never spread provider-parsed `arguments` next to a raw `__partialJson` (parsed args lag the stream by a throttled parse window).\n\nFor the bash tool specifically:\n- The pending preview may need raw `partialJson`, not just parsed `arguments`. Parsed args lag until a JSON object closes, which makes inline env assignments appear only at the end.\n- Preserve preview-only fields (e.g. `__partialJson`) through `event-controller.ts`, transcript rebuilds in `ui-helpers.ts`, and merged call/result rendering in `tool-execution.ts`. Missing one path causes inconsistent previews.\n- `ToolExecutionComponent.#buildRenderContext()` for bash must work even before a result exists — the renderer uses call args plus render context to show the command preview while streaming.\n- Verify both live streaming and rebuilt transcript paths after any bash preview change. A fix in one path does not fix the other.\n\n## Commands\n\n- NEVER commit unless asked.\n- Never use `tsc`/`npx tsc` — always `bun check`.\n\n## Testing Guidance\n\nTest the contract the system exposes — not the easiest internal detail to assert.\n\n- Every new test must defend one **concrete, externally observable contract**: behavior, output shape, state transition, error mapping, or a regression-prone parsing boundary. If you cannot name the contract, do not add the test.\n- No placeholder tests, tautologies, or \"the code ran\" assertions (`expect(true).toBe(true)`, bare `not.toThrow()`, non-empty string checks, length-grew checks, \"prompt exists\" checks without semantic assertion).\n- Prefer contract-level tests over implementation details. Avoid asserting internal helper wiring, field assignment, singleton identity, incidental ordering, prompt boilerplate, or passthrough option forwarding unless another component depends on that exact detail.\n- Don't duplicate coverage across abstraction levels. If an integration test already proves the behavior, drop the narrower unit test that restates it through mocks.\n- Tests **must be full-suite safe**, not just file-local safe. No long-lived file-wide mutations of `Bun.*`, `process.platform`, `process.env`, or `Bun.env` when a narrower seam exists. Prefer per-test `vi.spyOn(...)` with `vi.restoreAllMocks()` in `afterEach`. A test that passes alone but poisons later files is broken.\n- **Never use `mock.module()`**. Bun's `mock.module()` mutates the global module registry and leaks across files ([oven-sh/bun#12823](https://github.com/oven-sh/bun/issues/12823)). Use `spyOn` on the imported module object instead. For pass deps, import the pass and spy on `.run`. For package deps, namespace-import and spy on the exported function.\n- For lifecycle/stateful code, prefer one test per invariant or transition over several tiny tests asserting one field each from the same transition.\n- For error handling, trigger the real failure path and assert the surfaced contract — don't instantiate error classes directly or inspect internal metadata.\n- Smoke tests are acceptable only when they catch a failure mode narrower tests would miss. \"Package boots\" or \"command starts\" alone is not enough.\n- Assert exact strings, ordering, and formatting only when downstream code parses or depends on the exact bytes. Otherwise assert semantic content.\n- Compile-time guarantees → type checks/type tests, not runtime placeholders.\n- **Never source-grep.** A test that reads an implementation file (`.ts`/`.rs`/build script) and asserts on its *text* — `expect(src).toContain(\"someCall()\")`, `.toMatch(/import .../)`, `.not.toContain(\"oldName\")`, or \"comment must say X\" — is banned. It tests how code *looks*, not what it *does*: it breaks on harmless refactors (comment reflow, rename, import reorder) and passes while the behavior is broken. Assert the observable contract instead (run the code, check output/state/error), use the runtime smoke probe for wiring you cannot exercise in-process, and enforce structural invariants (no value-import of X, no self-import) with a type test or a lint/biome rule — never a string scan of the source. (Reading a file your code *wrote* — apply-patch result, generated bundle, temp fixture — and asserting on that output is fine; that is behavior, not a source grep.)\n- Don't add tests for tiny low-risk changes unless they protect a real contract or fix a regression-prone edge case.\n- Prefer focused package-local verification for the changed area.\n\n## Changelog\n\nLocation: `packages/*/CHANGELOG.md` (per package).\n\n**Format** — sections under `## [Unreleased]`:\n- `### Breaking Changes` (first if present)\n- `### Added`\n- `### Changed`\n- `### Fixed`\n- `### Removed`\n\n**Rules:**\n- New entries always go under `## [Unreleased]`.\n- Never modify already-released sections (e.g., `## [0.12.2]`) — they are immutable.\n- Don't flag changelog section order or formatting in reviews or PRs — `bun run release` runs `fix-changelogs` which normalizes everything automatically.\n\n**Attribution:**\n- Internal (from issues): `Fixed foo bar ([#123](https://github.com/can1357/oh-my-pi/issues/123))`.\n- External contributions: `Added feature X ([#456](https://github.com/can1357/oh-my-pi/pull/456) by [@username](https://github.com/username))`.\n\n## Releasing\n\n1. Ensure all changes since last release are in each affected package's `[Unreleased]` section.\n2. Run `bun run release`.\n\nThe script handles version bump, CHANGELOG finalization, commit, tag, publish, and adding new `[Unreleased]` sections.\n</file>\n</context>\nThe context files above are loaded automatically. You NEVER `grep`/`glob` for `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, or similar agent/context files — the relevant ones are already in your context; any others are noise.\nToday is 2026-07-04, and the current working directory is '~/Documents/oh-my-pi'.\n\n<critical>\n- Each response MUST advance the task. There is no stopping condition other than completion.\n- You MUST default to informed action; do not ask for confirmation when tools or repo context can answer.\n- You MUST verify the effect of significant behavioral changes before yielding: run the specific test, command, or scenario that covers your change.\n</critical>"
+        },
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Generate AGENTS.md by launching multiple `explore` agents in parallel (via `task` tool) scanning different areas (core src, tests, configs/build, scripts/docs), then synthesize findings into a single file.\n\n<structure>\n- **Project Overview**: Brief description of project purpose\n- **Architecture & Data Flow**: High-level structure, key modules, data flow\n- **Key Directories**: Main source directories, purposes\n- **Development Commands**: Build, test, lint, run commands\n- **Code Conventions & Common Patterns**: Formatting, naming, error handling, async patterns, dependency injection, state management\n- **Important Files**: Entry points, config files, key modules\n- **Runtime/Tooling Preferences**: Required runtime (e.g., Bun vs Node), package manager, tooling constraints\n- **Testing & QA**: Test frameworks, running tests, coverage expectations\n</structure>\n\n<directives>\n- You MUST title the document \"Repository Guidelines\"\n- You MUST use Markdown headings for structure\n- You MUST be concise and practical\n- You MUST focus on what an AI assistant needs to help with the codebase\n- You SHOULD include examples where helpful (commands, paths, naming patterns)\n- You SHOULD include file paths where relevant\n- You MUST call out architecture and code patterns explicitly\n- You SHOULD omit information obvious from code structure\n</directives>\n\n<output>\nAfter analysis, you MUST write AGENTS.md to the project root.\n</output>"
+                }
+            ]
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "reasoning_content": "The user wants me to generate an AGENTS.md file by first exploring the codebase with multiple parallel `explore` agents, then synthesizing findings. Let me set up the exploration.\n\nI need to:\n1. Launch multiple `explore` agents in parallel scanning different areas\n2. Synthesize their findings\n3. Write AGENTS.md to the project root\n\nLet me first check what already exists in the project structure to scope the exploration areas properly.",
+            "tool_calls": [
+                {
+                    "id": "call_00_S4y0b2vzdHbZhBl0gpdC3899",
+                    "type": "function",
+                    "function": {
+                        "name": "glob",
+                        "arguments": "{\"i\":\"Survey top-level structure\",\"path\":\"*\"}"
+                    }
+                },
+                {
+                    "id": "call_01_af8QNQPBjq74uxD6zwkO0015",
+                    "type": "function",
+                    "function": {
+                        "name": "glob",
+                        "arguments": "{\"i\":\"Survey packages dir\",\"path\":\"packages/*\"}"
+                    }
+                },
+                {
+                    "id": "call_02_l2wvMkk56Kq0FuPK1dKB6609",
+                    "type": "function",
+                    "function": {
+                        "name": "read",
+                        "arguments": "{\"i\":\"Check for existing AGENTS.md\",\"path\":\"AGENTS.md\"}"
+                    }
+                }
+            ]
+        },
+        {
+            "role": "tool",
+            "content": "[AGENTS.md#4796]\n1:# Development Rules\n2:\n3:## Default Context\n4:\n5:This repo contains multiple packages, but **`packages/coding-agent/`** is the primary focus. Unless otherwise specified, assume work refers to this package.\n6:\n7:**Terminology**: When the user says \"agent\" or asks \"why is agent doing X\", they mean the **coding-agent package implementation**, not you (the assistant). The coding-agent is a CLI tool — questions about its behavior refer to code in `packages/coding-agent/`, not your current session.\n8:\n9:### Package Structure\n10:\n11:| Package                 | Description                                          |\n12:| ----------------------- | ---------------------------------------------------- |\n13:| `packages/ai`           | Multi-provider LLM client with streaming support     |\n14:| `packages/catalog`      | Model catalog: bundled models.json, provider descriptors, model identity/classification |\n15:| `packages/agent`        | Agent runtime with tool calling and state management |\n16:| `packages/coding-agent` | Main CLI application (primary focus)                 |\n17:| `packages/tui`          | Terminal UI library with differential rendering      |\n18:| `packages/natives`      | Bindings for native text/image/grep operations       |\n19:| `packages/stats`        | Local observability dashboard (`omp stats`)          |\n20:| `packages/utils`        | Shared utilities (logger, streams, temp files)       |\n21:| `crates/pi-natives`     | Rust crate for performance-critical text/grep ops    |\n22:\n23:**Catalog import convention**: code in this repo imports catalog *values* (bundled models, model-thinking helpers, identity, descriptors, model manager/cache) from `@oh-my-pi/pi-catalog/<module>` — never via `@oh-my-pi/pi-ai`. The pi-ai barrel re-exports only the model/effort *types* its own signatures use (`Model`, `Api`, `ThinkingConfig`, `Effort`, …); type-only imports of those from `@oh-my-pi/pi-ai` are fine.\n24:\n25:## GitHub\n26:\n27:Unless user tells you exactly what to write:\n28:- **Never comment on GitHub** (issues, PRs, discussions).\n29:- **Never create issues on GitHub**.\n30:\n31:## Code Quality\n32:\n33:- No `any` unless absolutely necessary.\n34:- **NEVER use `ReturnType<>`** — use the actual type name.\n35:- **NEVER use inline imports** — no `await import()`, no `import(\"pkg\").Type` in type positions, no dynamic type imports. Always top-level.\n36:- Check `node_modules` for external API types instead of guessing.\n37:- **Barrel exports**: prefer `export * from \"./module\"` over named re-exports, including `export type { ... } from`. In pure `index.ts` barrels, use star re-exports even for single-specifier cases. If stars create ambiguity, remove the redundant export path; do not keep duplicates.\n38:- **Class privacy**: use ES `#private` fields; leave externally accessible members bare. **No `private`/`protected`/`public` keyword on fields or methods**, except on **constructor parameter properties** where TypeScript requires it (e.g. `constructor(private readonly session: ToolSession)`).\n39:- **Promises**: use `Promise.withResolvers()` instead of `new Promise((resolve, reject) => ...)`.\n40:- **Prompts**: never build prompts in code (no inline strings, template literals, or concatenation). Prompts live in static `.md` files; use Handlebars for dynamic content. Import them via `import content from \"./prompt.md\" with { type: \"text\" }` — not `readFile`.\n41:- **Worker scripts**: workers re-enter the CLI entrypoint; never spawn separate worker entry modules. `cli.ts` declares itself as the worker host at startup (`declareWorkerHostEntry()` from `@oh-my-pi/pi-utils/env`) and dispatches hidden argv selectors (`__omp_worker_stats_sync`, `__omp_worker_tab`, `__omp_worker_js_eval`, `__omp_worker_tiny_inference`) before loading the command registry. Spawn sites use:\n42:  ```ts\n43:  import { workerHostEntry } from \"@oh-my-pi/pi-utils\";\n44:  const hostEntry = workerHostEntry();\n45:  const worker = hostEntry\n46:  \t? new Worker(hostEntry, { type: \"module\", argv: [\"__omp_worker_<name>\"] })\n47:  \t: new Worker(new URL(\"./<worker>.ts\", import.meta.url).href, { type: \"module\" });\n48:  ```\n49:  When the process was started from the omp CLI — source `cli.ts`, npm-bundle `dist/cli.js`, or compiled binary — `workerHostEntry()` is `Bun.main` and the worker re-enters the single entry module, so no per-worker `--compile` entrypoints or bundle entries exist. Outside a CLI host (`bun test`, SDK embedding, standalone `omp-stats`) it returns `null` and the direct-module fallback loads the worker source. New worker kinds MUST add their selector to the dispatch table in `cli.ts` and keep the fallback branch.\n50:  History: `with { type: \"file\" }` only copied the entry as a raw asset (workers crashed silently in compiled binaries — issues #1011, #1027), and the later literal-path + extra-entrypoint pattern required keeping spawn literals and two build scripts in sync (issue #1150). The smoke probe below is the live validation of this contract.\n51:  Validate any new worker with the dedicated smoke probe: `omp --smoke-test` spawns the stats sync worker and the tiny-model subprocess, pings them, and exits — it's wired into `ci:test:smoke` and `scripts/install-tests/run-ci.sh` so binary, source-link, and tarball installs all exercise it. Add a sibling smoke if the new worker is on a different module graph.\n52:\n53:## Bun Over Node\n54:\n55:Use Bun APIs where they provide a cleaner alternative; fall back to `node:*` only for what Bun doesn't cover. **Never spawn shell commands for operations with proper APIs** (e.g., don't `Bun.spawnSync([\"mkdir\", \"-p\", dir])` — use `mkdirSync`).\n56:\n57:### Quick reference\n58:\n59:| Operation       | Use                                       | Not                             |\n60:| --------------- | ----------------------------------------- | ------------------------------- |\n61:| File read/write | `Bun.file()`, `Bun.write()`               | `readFileSync`, `writeFileSync` |\n62:| Spawn process   | `` $`cmd` ``, `Bun.spawn()`               | `child_process`                 |\n63:| Sleep           | `Bun.sleep(ms)`                           | `setTimeout` promise            |\n64:| Binary lookup   | `$which(\"git\")` from `@oh-my-pi/pi-utils` | `spawnSync([\"which\", \"git\"])`   |\n65:| HTTP server     | `Bun.serve()`                             | `http.createServer()`           |\n66:| SQLite          | `bun:sqlite`                              | `better-sqlite3`                |\n67:| Hashing         | `Bun.hash()`, `Bun.password.*`, WebCrypto | `node:crypto`                   |\n68:| Path resolution | `import.meta.dir`, `import.meta.path`     | `fileURLToPath` dance           |\n69:| JSON5           | `Bun.JSON5.parse()` / `.stringify()`      | `json5` package                 |\n70:| JSONL           | `Bun.JSONL.parse()` / `.parseChunk()`     | `text.split(\"\\n\").map(JSON.parse)` |\n71:| String width    | `Bun.stringWidth()`                       | `get-east-asian-width`, custom  |\n72:| Text wrapping   | `Bun.wrapAnsi()`                          | custom ANSI-aware wrappers      |\n73:\n74:### Process execution\n75:\n76:Prefer Bun Shell (`` $`cmd` ``) for simple commands:\n77:\n78:```typescript\n79:import { $ } from \"bun\";\n80:\n81:const result = await $`git status`.cwd(dir).quiet().nothrow();\n82:if (result.exitCode === 0) {\n83:\tconst text = result.text();\n84:}\n85:\n86:$`do-stuff ${tmpFile}`.quiet().nothrow(); // fire and forget\n87:```\n88:\n89:Methods: `.quiet()`, `.nothrow()`, `.text()`, `.cwd(path)`.\n90:\n91:Use `Bun.spawn`/`Bun.spawnSync` only for: long-running processes (LSP, kernels), streaming stdin/stdout/stderr (SSE, JSON-RPC), or process control (signals, kill, complex lifecycle).\n92:\n93:When using `pipe` mode, cast the stream:\n94:```typescript\n95:const child = Bun.spawn([\"cmd\"], { stdout: \"pipe\", stderr: \"pipe\" });\n96:const reader = (child.stdout as ReadableStream<Uint8Array>).getReader();\n97:```\n98:\n99:### Node module imports\n100:\n101:Always use **namespace imports** for `node:fs`, `node:path`, `node:os`:\n102:\n103:```typescript\n104:import * as fs from \"node:fs/promises\";\n105:import * as path from \"node:path\";\n106:import * as os from \"node:os\";\n107:```\n108:\n109:- Async-only file → `node:fs/promises`.\n110:- Needs both sync and async → `node:fs`, then `fs.promises.xxx` for async.\n111:\n112:### File I/O\n113:\n114:Prefer Bun:\n115:```typescript\n116:const text = await Bun.file(path).text();\n117:const data = await Bun.file(path).json();\n118:await Bun.write(path, data); // auto-creates parent dirs\n119:```\n120:\n121:Use `node:fs/promises` for directory ops (`fs.mkdir`, `fs.rm`, `fs.readdir`) — Bun has no native directory APIs. Avoid sync APIs in async flows; use sync only when forced by a synchronous interface.\n122:\n123:**Anti-patterns:**\n124:- `existsSync`/`readFileSync`/`writeFileSync` in async code → `Bun.file()` APIs.\n125:- `mkdir(dirname(path), …)` before `Bun.write(path, …)` → redundant; `Bun.write` handles it.\n126:- `if (await file.exists()) { await file.json() }` → two syscalls plus race. Use try-catch with `isEnoent`:\n127:  ```typescript\n128:  import { isEnoent } from \"@oh-my-pi/pi-utils\";\n129:  try {\n130:  \treturn await Bun.file(path).json();\n131:  } catch (err) {\n132:  \tif (isEnoent(err)) return null;\n133:  \tthrow err;\n134:  }\n135:  ```\n136:- Multiple `Bun.file(path)` handles for the same path (including across `checkX`/`loadX` helpers).\n137:- `Buffer.from(await Bun.file(x).arrayBuffer())` → `await fs.readFile(path)`.\n138:- Existence check + try-catch around the same read → drop the existence check.\n139:\n140:### Streams\n141:\n142:Prefer centralized helpers:\n143:```typescript\n144:import { readStream, readLines } from \"./utils/stream\";\n145:const text = await readStream(child.stdout);\n146:for await (const line of readLines(stream)) { /* ... */ }\n147:```\n148:Manual reader loops only when the protocol requires it (SSE, streaming JSON-RPC).\n149:\n150:### Misc\n151:\n152:- **Sleep**: `await Bun.sleep(ms)`, never `new Promise(r => setTimeout(r, ms))`.\n153:- **Password hashing**: `Bun.password.hash(pw, \"bcrypt\")` / `Bun.password.verify(pw, hash)`.\n154:- **String width**: `Bun.stringWidth(text, { countAnsiEscapeCodes?: false })`.\n155:- **Wrapping**: `Bun.wrapAnsi(text, width, { wordWrap, hard, trim })`.\n156:\n157:## Generated Files\n158:\n159:**NEVER edit `packages/catalog/src/models.json` directly.** It is generated from upstream sources (models.dev, provider catalog discovery, OpenCode docs) by `packages/catalog/scripts/generate-models.ts` and the descriptors/resolvers in `packages/catalog/src/provider-models/`. Hand-edits get overwritten on the next regen.\n160:\n161:To change an entry, fix the source:\n162:- **Resolution rules / per-id overrides** → relevant resolver in `packages/catalog/src/provider-models/openai-compat.ts` (e.g. `createOpenCodeApiResolution`'s id-override map).\n163:- **Provider catalog entries** (default model, discovery factory/flags) → the `CATALOG_PROVIDERS` table in `packages/catalog/src/provider-models/descriptors.ts`.\n164:- **Generator-level fixups** (premium multipliers, codex pricing fallback, fallback models, post-processing) → `packages/catalog/scripts/generate-models.ts`.\n165:- **Thinking metadata / generated policies** → `packages/catalog/src/model-thinking.ts` (`applyGeneratedModelPolicies`); model-id classification (family/version parsing) lives in `packages/catalog/src/identity/classify.ts`.\n166:\n167:Regenerate with `bun run gen:models` and commit `models.json` alongside the source change. Add a regression test against the **resolver/descriptor**, not the bundled JSON, so it survives upstream metadata shifts.\n168:\n169:## Logging\n170:\n171:**NEVER use `console.log`/`error`/`warn`** in the coding-agent package — it corrupts TUI rendering. Use the centralized logger:\n172:\n173:```typescript\n174:import { logger } from \"@oh-my-pi/pi-utils\";\n175:\n176:logger.error(\"MCP request failed\", { url, method });\n177:logger.warn(\"Theme file invalid, using fallback\", { path });\n178:logger.debug(\"LSP fallback triggered\", { reason });\n179:```\n180:\n181:Logs go to `~/.omp/logs/omp.YYYY-MM-DD.log` with automatic rotation.\n182:\n183:## TUI Sanitization\n184:\n185:All text displayed in tool renderers must be sanitized. Raw content (file contents, error messages, tool output) breaks terminal rendering: tabs → visual holes, long lines → overflow, paths → leak home directory.\n186:\n187:**Rules:**\n188:- **Tabs → spaces** via `replaceTabs()` (from `@oh-my-pi/pi-tui` or `../tools/render-utils`).\n189:- **Truncate** lines with `truncateToWidth()` / `ui.truncate()`. Use `TRUNCATE_LENGTHS` constants.\n190:- **Shorten paths** with `shortenPath()` (replaces home with `~`).\n191:- **Preview limits** from `PREVIEW_LIMITS`. No ad-hoc numbers.\n192:\n193:**Apply to every render path**, not just the happy one:\n194:- Success output (file previews, command output, search results).\n195:- **Error messages** — these often embed file content (e.g., patch failure messages include unmatched lines). If a message contains file content, it needs `replaceTabs()`.\n196:- Diff content (added and removed).\n197:- Streaming previews.\n198:\n199:### Streaming tool previews\n200:\n201:Tool-call previews can have **multiple render paths**. If you add preview-only fields or depend on partially streamed args, update every path — not only the final renderer. Streamed argument buffers decode into display args via `decodeStreamedToolArgs` / `ToolArgsRevealController` (`modes/controllers/tool-args-reveal.ts`); both the live event path and transcript rebuilds must go through them — never spread provider-parsed `arguments` next to a raw `__partialJson` (parsed args lag the stream by a throttled parse window).\n202:\n203:For the bash tool specifically:\n204:- The pending preview may need raw `partialJson`, not just parsed `arguments`. Parsed args lag until a JSON object closes, which makes inline env assignments appear only at the end.\n205:- Preserve preview-only fields (e.g. `__partialJson`) through `event-controller.ts`, transcript rebuilds in `ui-helpers.ts`, and merged call/result rendering in `tool-execution.ts`. Missing one path causes inconsistent previews.\n206:- `ToolExecutionComponent.#buildRenderContext()` for bash must work even before a result exists — the renderer uses call args plus render context to show the command preview while streaming.\n207:- Verify both live streaming and rebuilt transcript paths after any bash preview change. A fix in one path does not fix the other.\n208:\n209:## Commands\n210:\n211:- NEVER commit unless asked.\n212:- Never use `tsc`/`npx tsc` — always `bun check`.\n213:\n214:## Testing Guidance\n215:\n216:Test the contract the system exposes — not the easiest internal detail to assert.\n217:\n218:- Every new test must defend one **concrete, externally observable contract**: behavior, output shape, state transition, error mapping, or a regression-prone parsing boundary. If you cannot name the contract, do not add the test.\n219:- No placeholder tests, tautologies, or \"the code ran\" assertions (`expect(true).toBe(true)`, bare `not.toThrow()`, non-empty string checks, length-grew checks, \"prompt exists\" checks without semantic assertion).\n220:- Prefer contract-level tests over implementation details. Avoid asserting internal helper wiring, field assignment, singleton identity, incidental ordering, prompt boilerplate, or passthrough option forwarding unless another component depends on that exact detail.\n221:- Don't duplicate coverage across abstraction levels. If an integration test already proves the behavior, drop the narrower unit test that restates it through mocks.\n222:- Tests **must be full-suite safe**, not just file-local safe. No long-lived file-wide mutations of `Bun.*`, `process.platform`, `process.env`, or `Bun.env` when a narrower seam exists. Prefer per-test `vi.spyOn(...)` with `vi.restoreAllMocks()` in `afterEach`. A test that passes alone but poisons later files is broken.\n223:- **Never use `mock.module()`**. Bun's `mock.module()` mutates the global module registry and leaks across files ([oven-sh/bun#12823](https://github.com/oven-sh/bun/issues/12823)). Use `spyOn` on the imported module object instead. For pass deps, import the pass and spy on `.run`. For package deps, namespace-import and spy on the exported function.\n224:- For lifecycle/stateful code, prefer one test per invariant or transition over several tiny tests asserting one field each from the same transition.\n225:- For error handling, trigger the real failure path and assert the surfaced contract — don't instantiate error classes directly or inspect internal metadata.\n226:- Smoke tests are acceptable only when they catch a failure mode narrower tests would miss. \"Package boots\" or \"command starts\" alone is not enough.\n227:- Assert exact strings, ordering, and formatting only when downstream code parses or depends on the exact bytes. Otherwise assert semantic content.\n228:- Compile-time guarantees → type checks/type tests, not runtime placeholders.\n229:- **Never source-grep.** A test that reads an implementation file (`.ts`/`.rs`/build script) and asserts on its *text* — `expect(src).toContain(\"someCall()\")`, `.toMatch(/import .../)`, `.not.toContain(\"oldName\")`, or \"comment must say X\" — is banned. It tests how code *looks*, not what it *does*: it breaks on harmless refactors (comment reflow, rename, import reorder) and passes while the behavior is broken. Assert the observable contract instead (run the code, check output/state/error), use the runtime smoke probe for wiring you cannot exercise in-process, and enforce structural invariants (no value-import of X, no self-import) with a type test or a lint/biome rule — never a string scan of the source. (Reading a file your code *wrote* — apply-patch result,…\n230:- Don't add tests for tiny low-risk changes unless they protect a real contract or fix a regression-prone edge case.\n231:- Prefer focused package-local verification for the changed area.\n232:\n233:## Changelog\n234:\n235:Location: `packages/*/CHANGELOG.md` (per package).\n236:\n237:**Format** — sections under `## [Unreleased]`:\n238:- `### Breaking Changes` (first if present)\n239:- `### Added`\n240:- `### Changed`\n241:- `### Fixed`\n242:- `### Removed`\n243:\n244:**Rules:**\n245:- New entries always go under `## [Unreleased]`.\n246:- Never modify already-released sections (e.g., `## [0.12.2]`) — they are immutable.\n247:- Don't flag changelog section order or formatting in reviews or PRs — `bun run release` runs `fix-changelogs` which normalizes everything automatically.\n248:\n249:**Attribution:**\n250:- Internal (from issues): `Fixed foo bar ([#123](https://github.com/can1357/oh-my-pi/issues/123))`.\n251:- External contributions: `Added feature X ([#456](https://github.com/can1357/oh-my-pi/pull/456) by [@username](https://github.com/username))`.\n252:\n253:## Releasing\n254:\n255:1. Ensure all changes since last release are in each affected package's `[Unreleased]` section.\n256:2. Run `bun run release`.\n257:\n258:The script handles version bump, CHANGELOG finalization, commit, tag, publish, and adding new `[Unreleased]` sections.\n259:\n\n[Some lines truncated to 768 chars]",
+            "tool_call_id": "call_02_l2wvMkk56Kq0FuPK1dKB6609"
+        },
+        {
+            "role": "tool",
+            "content": "# packages/\ntsconfig.workspace.json\n## wire/\n## utils/\n## typescript-edit-benchmark/\n## tui/\n## terminal-bench/\n## swarm-extension/\n## stats/\n## snapcompact/\n## natives/\n## mnemopi/\n## hashline/\n## collab-web/\n## coding-agent/\n## catalog/\n## ai/\n## agent/",
+            "tool_call_id": "call_01_af8QNQPBjq74uxD6zwkO0015"
+        },
+        {
+            "role": "tool",
+            "content": "# .pi/\nmcp.base.json\n## prompts/\nfeature-design.md\nwrite-implementation-plan.md\nverify-before-done.md\nspec-review.md\nshadcn-ui-build.md\nrefactor-agent-instructions.md\nreact-view-transitions-build.md\nreact-performance-pass.md\nreact-component-api-refactor.md\nproject-next-step.md\ninterface-polish-pass.md\ninterface-design-direction.md\ncreate-agent-workflow.md\nimprove-skill-system.md\nfrontend-ui-audit.md\nfrontend-polish-pass.md\nfrontend-design-direction.md\nfix-review-issues.md\nexecute-plan-with-subagents.md\nexecute-plan-with-subagents-async.md\nexecute-plan-simple.md\ndebug-issue.md\ncreate-new-skill.md\nimprove-prompt-system.md\ncommit-work.md\ncode-quality-review.md\nproject-recap.md\nplan-review.md\ngenerate-web-diagram.md\ngenerate-visual-plan.md\ngenerate-slides.md\napi-review.md\nreview-code.md\n## agents/\nspec-reviewer.md\nimplementer.md\ncode-quality-reviewer.md\n## npm/\n.gitignore\n## git/\n.gitignore\n## profiles/\nno-skill.yaml\nautoresearch.yaml\nml-dev.yaml\nreadiness-report.yaml\nskill-authoring.yaml\nagentic.yaml\ndevops.yaml\ndesign.yaml\nfrontend.yaml\nbackend.yaml\nreview.yaml\nexecution.yaml\nplanning.yaml\nresearch.yaml\nexecution_agents.yaml\nbase.yaml\nvisual-explainer.yaml\nask.yaml\napi-review.yaml\ngoal.yaml\nmattpocock.yaml\n## skills/\n### handoff/\nSKILL.md\n### prototype/\nUI.md\nSKILL.md\nLOGIC.md\n### grill-with-docs/\nSKILL.md\n### code-quality-review/\nSKILL.md\n### spec-review/\nSKILL.md\n### source-driven-development/\nSKILL.md\n### spec-driven-development/\nSKILL.md\n### performance-optimization/\nSKILL.md\n### interview-me/\nSKILL.md\n### git-workflow-and-versioning/\nSKILL.md\n### code-simplification/\nSKILL.md\n### ci-cd-and-automation/\nSKILL.md\n### readiness-report/\nreport-template.md\nSKILL.md\n### slides/\nSKILL.md\n#### references/\nslide-strategies.md\nlayout-patterns.md\nhtml-template.md\ncreate.md\ncopywriting-formulas.md\n### interface-design/\nSKILL.md\n#### references/\nvalidation.md\nprinciples.md\nexample.md\ncritique.md\n### design-system/\nSKILL.md\n#### templates/\ndesign-tokens-starter.json\n#### scripts/\nvalidate-tokens.cjs\nslide_search_core.py\nslide-token-validator.py\nsearch-slides.py\nhtml-token-validator.py\ngenerate-tokens.cjs\ngenerate-slide.py\nfetch-background.py\nembed-tokens.cjs\n#### references/\ntoken-architecture.md\ntailwind-integration.md\nstates-and-variants.md\nsemantic-tokens.md\nprimitive-tokens.md\ncomponent-tokens.md\ncomponent-specs.md\n#### data/\nslide-typography.csv\nslide-strategies.csv\nslide-layouts.csv\nslide-layout-logic.csv\nslide-copy.csv\nslide-color-logic.csv\nslide-charts.csv\nslide-backgrounds.csv\n### brand/\nSKILL.md\n#### templates/\nbrand-guidelines-starter.md\n#### scripts/\nvalidate-asset.cjs\nsync-brand-to-tokens.cjs\ninject-brand-context.cjs\nextract-colors.cjs\n#### references/\nvoice-framework.md\nvisual-identity.md\nupdate.md\ntypography-specifications.md\nmessaging-framework.md\nlogo-usage-rules.md\nconsistency-checklist.md\ncolor-palette-management.md\nbrand-guideline-template.md\nasset-organization.md\napproval-checklist.md\n### banner-design/\nSKILL.md\n#### references/\nbanner-sizes-and-styles.md\n### architecture-diagram/\nSKILL.md\n#### assets/\ntemplate.html\n### web-design-guidelines/\nSKILL.md\n### react-view-transitions/\nmetadata.json\nSKILL.md\nREADME.md\nAGENTS.md\n#### references/\npatterns.md\nnextjs.md\nimplementation.md\ncss-recipes.md\n### react-best-practices/rules/\nserver-parallel-nested-fetching.md\nserver-no-shared-module-state.md\njs-request-idle-callback.md\nbundle-analyzable-paths.md\nasync-cheap-condition-before-await.md\nadvanced-effect-event-deps.md\nserver-serialization.md\nserver-parallel-fetching.md\nserver-hoist-static-io.md\nserver-dedup-props.md\nserver-cache-react.md\nserver-cache-lru.md\nserver-auth-actions.md\nserver-after-nonblocking.md\nrerender-use-ref-transient-values.md\nrerender-use-deferred-value.md\n\n[200 results limit reached. Use limit=400 for more]",
+            "tool_call_id": "call_00_S4y0b2vzdHbZhBl0gpdC3899"
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "reasoning_content": "I already have a very comprehensive AGENTS.md file. The user wants me to generate a new one by exploring with subagents and then writing it. Let me check the existing file more carefully and launch exploration agents in parallel.\n\nLet me first understand the full scope. The existing AGENTS.md is massive and detailed. Let me launch several explore agents in parallel to scan different areas, then synthesize.\n\nLet me look at what's in packages/coding-agent specifically since that's the primary focus, and also check key config files.",
+            "tool_calls": [
+                {
+                    "id": "call_00_V157kpHwhHqgSUrRsQhZ2725",
+                    "type": "function",
+                    "function": {
+                        "name": "glob",
+                        "arguments": "{\"i\":\"Survey coding-agent package\",\"path\":\"packages/coding-agent/src/**/*.ts\"}"
+                    }
+                },
+                {
+                    "id": "call_01_v7y4i6xBHKosFt6UED6G3233",
+                    "type": "function",
+                    "function": {
+                        "name": "glob",
+                        "arguments": "{\"i\":\"Check config files\",\"path\":\"package.json;tsconfig.json;biome.json;*.config.*\"}"
+                    }
+                },
+                {
+                    "id": "call_02_VjojiVZmh7JezeK7LlxQ5958",
+                    "type": "function",
+                    "function": {
+                        "name": "glob",
+                        "arguments": "{\"i\":\"Check scripts dir\",\"path\":\"scripts/**/*\"}"
+                    }
+                }
+            ]
+        },
+        {
+            "role": "tool",
+            "content": "# scripts/\nsetup-npm-trust.ts\nsync-themes.ts\nsync-versions.ts\ntool-prompt-usage.ts\ntool_io.py\ntrace-loader.ts\ninstall.ps1\ninstall.sh\nlink-omp.sh\nlink-omp.test.ts\nmacos-entitlements.plist\nrate-edit-tool.py\nrelease.ts\nrewrite-changelog.ts\nrewrite-system-prompt.style.md\nrewrite-system-prompt.ts\nrun-rs-task.ts\nclaude-trace.ts\nedit-benchmark.py\nedit_benchmark_common.py\neval-bench-runs.ts\nfix-changelogs.test.ts\nfix-changelogs.ts\nfix-test-imports.ts\nhost-detect.ts\ninline-functions.test.ts\ninline-functions.ts\nanalyze_small_edits.py\nbash_corpus_stats.jl\ncheck-spoofed-versions.ts\nci-build-native.ts\nci-concurrency.test.ts\nci-macos-sign.sh\nci-macos-upload-secrets.sh\nci-release-build-binaries.ts\nci-release-notes.test.ts\nci-release-notes.ts\nci-release-publish.ts\nci-test-ts.ts\nci-update-brew-formula.test.ts\nci-update-brew-formula.ts\n__init__.py\n## session-stats/\nplot_read_summarizer.py\nplot_tools.py\nread_optimizer.py\nsync.py\nanalyze.py\nanalyze_search_relevance.py\nanalyze_selector_reads.py\naudit-prompt.md\naudit.test.ts\naudit.ts\nharmony_backtest.py\noptimize_read_config.py\nREADME.md\n### out/\ntool-trends.png\ntokens-per-call.png\nselector-coverage.png\nselector-followups.png\nsearch-relevance.png\nread-summarizer.png\nread-config-sweep.png\nread-optimizer.png\nper-call-percentiles.png\nper-call-histogram.png\nper-call-median.png\ndaily-calls.png\ndaily-tokens.png\ncumulative-tokens.png\n## install-tests/\nrun-ci.sh\nrun-podman.sh\nsource.dockerfile\ntarball.dockerfile\nbinary.dockerfile",
+            "tool_call_id": "call_02_VjojiVZmh7JezeK7LlxQ5958"
+        },
+        {
+            "role": "tool",
+            "content": "# packages/coding-agent/src/\nworkspace-tree.ts\n## web/\nparallel.ts\nkagi.ts\n### search/\nrender.ts\ntypes.ts\nutils.ts\nprovider.ts\nindex.ts\n#### providers/\nbase.ts\nbrave.ts\ncodex.ts\nduckduckgo.ts\nexa.ts\nfirecrawl.ts\ngemini.ts\njina.ts\nkagi.ts\nkimi.ts\nparallel.ts\nperplexity-auth.ts\nperplexity.ts\nsearxng.ts\nsynthetic.ts\ntavily.ts\ntinyfish.ts\nutils.ts\nxai.ts\nzai.ts\nanthropic.ts\n### scrapers/\nsemantic-scholar.ts\nsnapcraft.ts\nsourcegraph.ts\nspdx.ts\nspotify.ts\nstackoverflow.ts\nterraform.ts\ntldr.ts\ntwitter.ts\ntypes.ts\nutils.ts\nvimeo.ts\nvscode-marketplace.ts\nw3c.ts\nwikidata.ts\nwikipedia.ts\nyoutube.ts\nlemmy.ts\nlobsters.ts\nmastodon.ts\nmaven.ts\nmdn.ts\nmetacpan.ts\nmusicbrainz.ts\nnpm.ts\nnuget.ts\nnvd.ts\nollama.ts\nopen-vsx.ts\nopencorporates.ts\nopenlibrary.ts\norcid.ts\nosv.ts\npackagist.ts\npub-dev.ts\npubmed.ts\npypi.ts\nrawg.ts\nreadthedocs.ts\nreddit.ts\nrepology.ts\nrfc.ts\nrubygems.ts\nsearchcode.ts\nsec-edgar.ts\narxiv.ts\naur.ts\nbiorxiv.ts\nbluesky.ts\nbrew.ts\ncheatsh.ts\nchocolatey.ts\nchoosealicense.ts\ncisa-kev.ts\nclojars.ts\ncoingecko.ts\ncrates-io.ts\ncrossref.ts\ndevto.ts\ndiscogs.ts\ndiscourse.ts\ndockerhub.ts\ndocs-rs.ts\nfdroid.ts\nfirefox-addons.ts\nflathub.ts\ngithub-gist.ts\ngithub.ts\ngitlab.ts\ngo-pkg.ts\nhackage.ts\nhackernews.ts\nhex.ts\nhuggingface.ts\niacr.ts\nindex.ts\njetbrains-marketplace.ts\nartifacthub.ts\n## utils/\nqrcode.ts\nsession-color.ts\nshell-snapshot.ts\nsixel.ts\nthinking-display.ts\ntitle-generator.ts\ntool-choice.ts\ntools-manager.ts\nturndown.ts\nzip.ts\nblock-context.ts\nchangelog.ts\nclipboard.ts\ncommand-args.ts\ncommit-message-generator.ts\nedit-mode.ts\nenhanced-paste.ts\nevent-bus.ts\nexternal-editor.ts\nfetch-timeout.ts\nfile-display-mode.ts\nfile-mentions.ts\ngit.ts\nimage-loading.ts\nimage-resize.ts\nimage-vision-fallback.ts\nipc.ts\njj.ts\nlang-from-path.ts\nmarkit-cache.ts\nmarkit.ts\nmupdf-wasm-embed.ts\nopen.ts\nprompt-path.ts\nactive-repo-context.ts\n## tui/\nfile-list.ts\nhyperlink.ts\nindex.ts\noutput-block.ts\nstatus-line.ts\ntree-list.ts\ntypes.ts\nutils.ts\nwidth-aware-text.ts\ncode-cell.ts\n## tts/\nindex.ts\nmodels.ts\nplayer.ts\nruntime.ts\nspeakable.ts\nspeech-enhancer.ts\nstreaming-player.ts\ntts-client.ts\ntts-protocol.ts\ntts-worker.ts\nvocalizer.ts\nwav.ts\ndownloader.ts\n## tools/\ntodo.ts\ntool-errors.ts\ntool-result.ts\ntool-timeouts.ts\ntts.ts\nwrite.ts\nyield.ts\nread.ts\nrender-utils.ts\nrenderers.ts\nreport-tool-issue.ts\nresolve.ts\nreview.ts\nsearch-tool-bm25.ts\nsqlite-reader.ts\nssh.ts\noutput-meta.ts\noutput-schema-validator.ts\npath-utils.ts\nplan-mode-guard.ts\nimage-gen.ts\nindex.ts\ninspect-image-renderer.ts\ninspect-image.ts\nirc.ts\njob.ts\njson-tree.ts\njtd-to-json-schema.ts\njtd-to-typescript.ts\njtd-utils.ts\nlearn.ts\nlist-limit.ts\nmanage-skill.ts\nmatch-line-format.ts\nmemory-edit.ts\n\n[200 results limit reached. Use limit=400 for more]",
+            "tool_call_id": "call_00_V157kpHwhHqgSUrRsQhZ2725"
+        },
+        {
+            "role": "tool",
+            "content": "tsconfig.json\npackage.json\nbiome.json\n# python/robomp/web/\nvite.config.ts\n# packages/stats/\ntailwind.config.js",
+            "tool_call_id": "call_01_v7y4i6xBHKosFt6UED6G3233"
+        },
+        {
+            "role": "assistant",
+            "content": "Now I'll launch 4 parallel explore agents to scan different areas of the codebase.",
+            "reasoning_content": "Now let me launch multiple explore agents in parallel to scan different areas of the codebase. I'll have agents explore:\n\n1. Core src (packages/coding-agent/src) - architecture, entry points, modes\n2. Tests structure and patterns\n3. Config/build system (package.json, tsconfig, build scripts, release)\n4. Other packages (ai, agent, catalog, tui, utils, natives) - their APIs/purpose\n\nLet me launch these in parallel.",
+            "tool_calls": [
+                {
+                    "id": "call_00_X0lGe7X65qujR7z83Dlq1958",
+                    "type": "function",
+                    "function": {
+                        "name": "task",
+                        "arguments": "{\"i\":\"Explore core coding-agent architecture\",\"context\":\"# Goal\\nMap the architecture, key modules, entry points, and data flow of packages/coding-agent.\\n\\n# Constraints\\n- READ-ONLY: do not edit any files\\n- Focus on architecture patterns, not implementation details\\n- Report file paths for all key modules\",\"tasks\":[{\"assignment\":\"# Target\\npackages/coding-agent/src/ — the primary CLI application package.\\n\\n# Change\\n1. Read `packages/coding-agent/src/cli.ts` (entry point), `packages/coding-agent/src/index.ts`, and any main barrel exports to understand the CLI structure.\\n2. Read `packages/coding-agent/package.json` for scripts, dependencies, and entry points.\\n3. Explore the `modes/` directory (if it exists) to understand execution modes (chat, auto, plan, etc.).\\n4. Explore the `tools/` directory to understand tool system architecture.\\n5. Explore the `controllers/` or similar directories for MVC/state patterns.\\n6. Identify key data flow: how user input → LLM → tool calls → response rendering works.\\n7. Look at how prompts are loaded and managed.\\n\\n# Acceptance\\n- Report: entry points (CLI args, bin commands), execution modes, tool system architecture, prompt loading pattern, render pipeline, and key source directories with purposes.\\n- Include notable file paths for each subsystem.\",\"description\":\"Explore core coding-agent architecture\",\"id\":\"CoreArchitecture\",\"role\":\"Architecture explorer\"}],\"agent\":\"explore\"}"
+                    }
+                },
+                {
+                    "id": "call_01_e6ELj6yZatW5SyReMEPi4385",
+                    "type": "function",
+                    "function": {
+                        "name": "task",
+                        "arguments": "{\"i\":\"Explore tests and QA patterns\",\"context\":\"# Goal\\nMap the test infrastructure, frameworks, conventions, and QA tooling across the repo.\\n\\n# Constraints\\n- READ-ONLY: do not edit any files\\n- Focus on test patterns, not individual test content\\n- Report file paths for test config and key test files\",\"tasks\":[{\"assignment\":\"# Target\\nTest infrastructure across all packages, with focus on packages/coding-agent.\\n\\n# Change\\n1. Find test configuration: look at biome.json for test settings, any vitest/bun test configs.\\n2. Explore packages/coding-agent/tests/ (or __tests__/) — directory structure, naming conventions.\\n3. Identify test framework: vitest? bun test? jest? Look at imports (describe, it, expect, beforeEach).\\n4. Find any test utilities, fixtures, or shared test helpers.\\n5. Look at scripts/ for CI test scripts (ci-test-ts.ts, etc.) and understand how tests run in CI.\\n6. Check package.json for test-related scripts across all packages.\\n7. Look for snapshot tests, integration tests, E2E tests.\\n\\n# Acceptance\\n- Report: test framework(s), test directory conventions, naming patterns, CI test pipeline, key test scripts, mock/spy conventions, common test helpers.\",\"description\":\"Explore tests and QA patterns\",\"id\":\"TestsQA\",\"role\":\"Test infrastructure explorer\"}],\"agent\":\"explore\"}"
+                    }
+                },
+                {
+                    "id": "call_02_wRbLvdbG2thmZ5Cahlkg4822",
+                    "type": "function",
+                    "function": {
+                        "name": "task",
+                        "arguments": "{\"i\":\"Explore config, build, and release system\",\"context\":\"# Goal\\nMap the build system, configuration, and release pipeline across the repo.\\n\\n# Constraints\\n- READ-ONLY: do not edit any files\\n- Focus on commands and config, not implementation details\\n- Report file paths for all config files\",\"tasks\":[{\"assignment\":\"# Target\\nBuild, config, and release tooling across the entire repo.\\n\\n# Change\\n1. Read root `package.json` — workspaces, top-level scripts, dependencies.\\n2. Read `tsconfig.json` and `packages/tsconfig.workspace.json` — compiler settings.\\n3. Read `biome.json` — linter/formatter configuration.\\n4. Explore `scripts/` — identify release.ts, ci-*.ts, fix-changelogs.ts, and other key scripts.\\n5. Check if there's a bunfig.toml or .bunrc.\\n6. Look at `packages/coding-agent/package.json` for bin entries (CLI commands).\\n7. Check for Dockerfiles, nix configs, or other build env specs.\\n8. Look at any GitHub Actions / CI configs (`.github/`).\\n9. Check `crates/` for Rust build system (Cargo.toml).\\n\\n# Acceptance\\n- Report: workspace structure, build commands (build, check, lint, format), release process, CI pipeline, bin commands, compiler settings, Rust integration.\",\"description\":\"Explore config, build, release\",\"id\":\"ConfigBuild\",\"role\":\"Build system explorer\"}],\"agent\":\"explore\"}"
+                    }
+                },
+                {
+                    "id": "call_03_neRA1qxDfkIcpxslKtuX5363",
+                    "type": "function",
+                    "function": {
+                        "name": "task",
+                        "arguments": "{\"i\":\"Explore packages ecosystem\",\"context\":\"# Goal\\nMap the supporting packages (ai, agent, catalog, tui, utils, natives, stats) — their purposes, public APIs, and how coding-agent consumes them.\\n\\n# Constraints\\n- READ-ONLY: do not edit any files\\n- Focus on public API surface and package purpose\\n- Report file paths for key modules\",\"tasks\":[{\"assignment\":\"# Target\\nAll packages except coding-agent: packages/ai, packages/agent, packages/catalog, packages/tui, packages/utils, packages/natives, packages/stats, crates/pi-natives.\\n\\n# Change\\nFor each package:\\n1. Read its package.json for name, description, dependencies.\\n2. Read its main barrel export (index.ts or src/index.ts) for public API surface.\\n3. Identify key exported classes, functions, types.\\n4. Understand its role in the system and how coding-agent depends on it.\\n\\nSpecifically:\\n- `packages/ai` — LLM client: providers, streaming, model types\\n- `packages/agent` — Agent runtime: tool calling loop, state management, session\\n- `packages/catalog` — Model catalog: bundled models.json, provider descriptors\\n- `packages/tui` — Terminal UI: rendering primitives, components\\n- `packages/utils` — Shared utilities: logger, streams, env, temp files\\n- `packages/natives` — Native bindings (Rust FFI)\\n- `packages/stats` — Observability dashboard\\n- `crates/pi-natives` — Rust crate for perf-critical ops\\n\\n# Acceptance\\n- Report: for each package, its purpose, key exports, and relationship to coding-agent. Note import conventions (e.g., @oh-my-pi/pi-catalog vs @oh-my-pi/pi-ai).\",\"description\":\"Explore supporting packages\",\"id\":\"PackagesEcosystem\",\"role\":\"Package ecosystem explorer\"}],\"agent\":\"explore\"}"
+                    }
+                }
+            ]
+        },
+        {
+            "role": "tool",
+            "content": "Spawned agent `TestsQA` (job `TestsQA`) — Explore tests and QA patterns. The result will be delivered when it yields. DM `TestsQA` via `irc` to coordinate while it runs; use `job` only to inspect (`list`), wait (`poll`), or cancel a stuck task.",
+            "tool_call_id": "call_01_e6ELj6yZatW5SyReMEPi4385"
+        },
+        {
+            "role": "tool",
+            "content": "Spawned agent `ConfigBuild` (job `ConfigBuild`) — Explore config, build, release. The result will be delivered when it yields. DM `ConfigBuild` via `irc` to coordinate while it runs; use `job` only to inspect (`list`), wait (`poll`), or cancel a stuck task.",
+            "tool_call_id": "call_02_wRbLvdbG2thmZ5Cahlkg4822"
+        },
+        {
+            "role": "tool",
+            "content": "Spawned agent `PackagesEcosystem` (job `PackagesEcosystem`) — Explore supporting packages. The result will be delivered when it yields. DM `PackagesEcosystem` via `irc` to coordinate while it runs; use `job` only to inspect (`list`), wait (`poll`), or cancel a stuck task.",
+            "tool_call_id": "call_03_neRA1qxDfkIcpxslKtuX5363"
+        },
+        {
+            "role": "tool",
+            "content": "Spawned agent `CoreArchitecture` (job `CoreArchitecture`) — Explore core coding-agent architecture. The result will be delivered when it yields. DM `CoreArchitecture` via `irc` to coordinate while it runs; use `job` only to inspect (`list`), wait (`poll`), or cancel a stuck task.",
+            "tool_call_id": "call_00_X0lGe7X65qujR7z83Dlq1958"
+        },
+        {
+            "role": "assistant",
+            "content": "All four agents launched. Waiting for results.",
+            "reasoning_content": "All 4 agents are spawned. Let me wait for them to complete. I'll poll for all running jobs.",
+            "tool_calls": [
+                {
+                    "id": "call_00_WvcDXYiHPPoY5sS0D8FL0079",
+                    "type": "function",
+                    "function": {
+                        "name": "job",
+                        "arguments": "{\"i\":\"Wait for all explore agents\",\"poll\":[\"CoreArchitecture\",\"TestsQA\",\"ConfigBuild\",\"PackagesEcosystem\"]}"
+                    }
+                }
+            ]
+        },
+        {
+            "role": "tool",
+            "content": "## Still Running (4)\n\n- `CoreArchitecture` [task] — CoreArchitecture\n- `TestsQA` [task] — TestsQA\n- `ConfigBuild` [task] — ConfigBuild\n- `PackagesEcosystem` [task] — PackagesEcosystem",
+            "tool_call_id": "call_00_WvcDXYiHPPoY5sS0D8FL0079"
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "reasoning_content": "All 4 agents are still running. Let me wait again.",
+            "tool_calls": [
+                {
+                    "id": "call_00_qtw4sxAYNhmOMXQidYNm3368",
+                    "type": "function",
+                    "function": {
+                        "name": "job",
+                        "arguments": "{\"i\":\"Wait for explore agents to finish\",\"poll\":[\"CoreArchitecture\",\"TestsQA\",\"ConfigBuild\",\"PackagesEcosystem\"]}"
+                    }
+                }
+            ]
+        },
+        {
+            "role": "tool",
+            "content": "## Still Running (4)\n\n- `CoreArchitecture` [task] — CoreArchitecture\n- `TestsQA` [task] — TestsQA\n- `ConfigBuild` [task] — ConfigBuild\n- `PackagesEcosystem` [task] — PackagesEcosystem",
+            "tool_call_id": "call_00_qtw4sxAYNhmOMXQidYNm3368"
+        },
+        {
+            "role": "assistant",
+            "content": "",
+            "reasoning_content": "Still running. Let me wait again.",
+            "tool_calls": [
+                {
+                    "id": "call_00_4lVF6ZRsuWDZdFpynZan2255",
+                    "type": "function",
+                    "function": {
+                        "name": "job",
+                        "arguments": "{\"i\":\"Wait for explore agents\",\"poll\":[\"CoreArchitecture\",\"TestsQA\",\"ConfigBuild\",\"PackagesEcosystem\"]}"
+                    }
+                }
+            ]
+        },
+        {
+            "role": "tool",
+            "content": "## Still Running (4)\n\n- `CoreArchitecture` [task] — CoreArchitecture\n- `TestsQA` [task] — TestsQA\n- `ConfigBuild` [task] — ConfigBuild\n- `PackagesEcosystem` [task] — PackagesEcosystem",
+            "tool_call_id": "call_00_4lVF6ZRsuWDZdFpynZan2255"
+        }
+    ],
+    "stream": true,
+    "stream_options": {
+        "include_usage": true
+    },
+    "store": false,
+    "tools": [
+        {
+            "type": "function",
+            "function": {
+                "name": "read",
+                "description": "Read files, directories, archives, SQLite, images, documents, internal resources, and web URLs via one `path`.\n\n<instruction>\n- SHOULD parallelize independent reads.\n- SHOULD use `read` (not a browser tool) for web content; browser only when `read` can't deliver.\n</instruction>\n\n## Parameters\n\n- `path` — required. Local path, internal URI (`skill://`, `agent://`, `artifact://`, `memory://`, `rule://`, `local://`, `vault://`, `mcp://`, `omp://`, `issue://`, `pr://`, `ssh://`), or URL. Append `:<sel>` for ranges/modes (e.g. `src/foo.ts:50-200`, `src/foo.ts:raw`, `db.sqlite:users:42`).\n\n## Selectors\n\n- _(none)_ — parseable code → structural summary; other files → from start (up to 300 lines).\n- `:50` / `:50-` — from line 50 onward.\n- `:50-200` — lines 50–200 inclusive.\n- `:50+150` — 150 lines from 50.\n- `:20+1` — anchor line 20.\n- `:5-16,960-973` — multiple ranges in one call.\n- `:raw` — verbatim; no anchors/summary/line prefixes.\n- `:2-4:raw` / `:raw:2-4` — range AND verbatim; either order.\n- `:conflicts` — one line per unresolved git merge conflict block.\n\n# Files\n\n- Directory → depth-limited dirent listing.\n- File + selector → filename-only snapshot header + numbered lines: `[foo.ts#1A2B]` then `41:def alpha():`. Copy `[FILENAME#TAG]` for anchored edits; ops use bare line numbers. NEVER fabricate the tag.\n- Parseable code, no selector → **structural summary**: declarations kept, body elided with `…`. Footer names the recovery selector; re-issue ONLY the ranges you need.\n\n# Documents & Notebooks\n\nPDF, Word, PowerPoint, Excel, RTF, EPUB → extracted text. Notebooks (`.ipynb`) → editable `# %% [type] cell:N` text. `:raw` bypasses the converter.\n\n# Images\n\nImage → decoded inline (PNG, JPEG, GIF, WEBP) for direct visual analysis.\n\n# Archives\n\n`.tar`, `.tar.gz`, `.tgz`, `.zip`. `archive.ext:path/inside/archive` reads a member; inner paths take normal selectors: `archive.zip:dir/file.ts:50-60`.\n\n# SQLite\n\nFor `.sqlite`, `.sqlite3`, `.db`, `.db3`:\n- `file.db` — tables with row counts\n- `file.db:table` — schema + sample rows\n- `file.db:table:key` — row by primary key\n- `file.db:table?limit=50&offset=100` — pagination\n- `file.db:table?where=status='active'&order=created:desc` — filter/order\n- `file.db?q=SELECT …` — read-only SELECT\n\n# URLs\n\n- Reader-mode default: HTML, GitHub issues/PRs, Stack Overflow, Wikipedia, Reddit, NPM, arXiv, RSS/Atom, JSON endpoints, PDFs → clean text/markdown.\n- `:raw` → untouched HTML; line selectors (`:50`, `:50-100`, `:50+150`) paginate the fetch.\n- Bare `host:port` collides with selector grammar — add a trailing slash: `https://example.com/:80`.\n\n# Internal URIs\n\nAll URI schemes take the same line selectors. `artifact://<id>` recovers spilled output; large artifacts block unbounded `:raw`, so page with `artifact://<id>:N-M` / `artifact://<id>:raw:N-M` and use the reported artifact file path for search/copy workflows.\n\n`ssh://host/<absolute-path>` reads a remote text file (UTF-8, ≤1 MiB) or lists a directory one level deep, on a pre-configured SSH host or `~/.ssh/config` alias; `ssh://host/` lists the remote root and bare `ssh://` lists the configured hosts. Files are also writable via `write` and searchable via `search`; a directory only lists (`search` refuses a directory, `write` refuses to overwrite one). A literal `:`, `?`, or `#` in the remote path must be percent-encoded (`%3A`/`%3F`/`%23`) — a trailing `:sel` is read as a line selector, and `?`/`#` start a URL query/fragment. Requires a POSIX login shell (`sh`/`bash`/`zsh`); a Windows host or a non-POSIX shell (fish, csh/tcsh) is rejected — use the `ssh` tool there.\n\n<critical>\n- Line ranges go in the selector: `path=\"src/foo.ts:50-200\"`.\n- Summary footer names elided ranges? Re-issue ONLY those ranges. NEVER guess `..`/`…` content.\n</critical>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "Local path, internal URI (e.g. \"omp://\", \"issue://123\", \"pr://123\"), or URL; append :<sel> for line ranges or raw mode (e.g. \"src/foo.ts:50-100\")"
+                        }
+                    },
+                    "required": [
+                        "path",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "bash",
+                "description": "Runs bash in a shell session — terminal ops: git, bun, cargo, python.\n\n# When to use bash — and when not to\n\nBash invokes **real binaries** with simple args. It is NOT a scripting surface.\n\nUse bash ONLY for: a single binary call, or one short pipeline that COMPUTES a fact (`wc -l`, `sort | uniq -c`, `comm`, `diff`, a checksum, `git status`).\n\nAnything below → `eval` cell, not bash:\n- Inline interpreter scripts (`-e`/`-c`/`--eval`) when an eval runtime exists for that language\n- Heredocs (`<<EOF`), `while`/`for`/`if`/`case` shell control flow\n- `$(…)` command substitution nested inside another command\n- Pipelines with more than two stages, or stages that need control flow or quote/JSON escaping\n- Multiline commands, `&&`-chains mixing control flow\n- Quote/JSON escaping that fights the shell\n\n<instruction>\n- `cwd` sets the working dir, not `cd dir && …`\n- `env: { NAME: \"…\" }` for multiline / quote-heavy / untrusted values; reference `$NAME`\n- Quote expansions (`\"$NAME\"`) to preserve exact content\n- `pty: true` only when the command needs a real terminal (`sudo`, `ssh` needing input); default `false`\n- `;` only when later commands should run despite earlier failures\n- Multiple bash calls per message run concurrently. NEVER split order-dependent commands across parallel calls — chain with `&&` in one call.\n- Internal URIs (`skill://`, `agent://`, …) auto-resolve to FS paths\n- `async: true` for long-running commands when you don't need immediate output: returns a background job ID; result delivered as a follow-up.\n</instruction>\n\n<critical>\n- Bash invokes real binaries with simple args; it is NOT a scripting surface. Loops, conditionals, heredocs, inline interpreter scripts (`-e`/`-c`/`--eval`) when an eval runtime exists, several piped stages, or quote/JSON escaping mean you're writing a program → use `eval` cells: restartable, stateful, and free of shell-quoting traps.\n</critical>\n\n<output>\n- Returns output (stderr merged into stdout); exit code shown on non-zero exit.\n- Truncated output → `artifact://<id>` (linked in metadata).\n</output>\n\n# Timeout and async\n\n- `timeout` (seconds) caps wall-clock duration; the process is killed on elapse.\n- `async: true` defers only reporting — it does NOT extend the timeout; a daemon run with `async: true` is still killed when `timeout` elapses.\n- Long-running daemons (dev servers, watchers): pass a large explicit `timeout`. The shell session persists across calls, so `cmd &` keeps running between bash calls.\n\n# Output minimizer\n\n- Long output truncated; test/lint runner output filtered to failures. When visible text changed, a `[raw output: artifact://<id>]` footer links the full capture — read it if a run looks suspicious or you need exact bytes.\n- No footer = what you see is exactly what the command emitted.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "command": {
+                            "type": "string"
+                        },
+                        "env": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        },
+                        "timeout": {
+                            "type": "number"
+                        },
+                        "cwd": {
+                            "type": "string"
+                        },
+                        "pty": {
+                            "type": "boolean"
+                        },
+                        "async": {
+                            "type": "boolean",
+                            "description": "run in background"
+                        }
+                    },
+                    "required": [
+                        "command",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "ast_grep",
+                "description": "Structural code search via ast-grep.\n\n<instruction>\n- Use when syntax shape matters more than text (calls, declarations, language constructs)\n- Narrow each call to one language\n- `pat` is ONE AST pattern; separate calls for unrelated patterns\n- `$NAME` captures one node; `$_` matches one without binding; `$$$NAME` captures zero-or-more; `$$$` matches zero-or-more without binding. Use `$$$NAME`, NOT `$$NAME` — the two-dollar form is invalid\n- Metavariable names are UPPERCASE and MUST be the whole AST node — partial text like `prefix$VAR`, `\"hello $NAME\"`, or `a $OP b` does NOT work\n- Same metavariable twice → both occurrences MUST match identical code (`$A == $A` matches `x == x`, not `x == y`)\n- Patterns MUST parse as a single valid AST node. Non-standalone snippets → wrap in context, e.g. `class $_ { … }`\n- C++ expression-statement calls need trailing `;`: `ns::doThing($ARG);`, `$CALLEE($ARG);`\n- TS declarations/methods — tolerate unknown annotations: `async function $NAME($$$ARGS): $_ { $$$BODY }` or `class $_ { method($ARG: $_): $_ { $$$BODY } }`\n- Declaration forms are distinct shapes — `function foo`, method `foo()`, `const foo = () => {}`; search the right form before concluding absence\n- Loosest existence check: `pat: \"executeBash\"` with narrow `path`\n</instruction>\n\n<output>\n- Matches under a snapshot tag header: `[src/foo.ts#1A2B]`, `*42:` matched, ` 43:` context\n</output>\n\n<critical>\n- AVOID repo-root scans — narrow `path` first\n- Parse issues = query failure, not absence: fix the pattern or tighten `path` before concluding \"no matches\"\n- Broad cross-subsystem exploration: you SHOULD use the Task tool + explore subagent first\n</critical>\n\n<examples>\n# Search TypeScript files under src\n<example>\n<｜tool▁call▁begin｜>ast_grep<｜tool▁sep｜>{\"i\":\"…\",\"pat\":\"console.log($$$)\",\"path\":\"src/**/*.ts\"}<｜tool▁call▁end｜>\n</example>\n# Named imports from a specific package\n<example>\n<｜tool▁call▁begin｜>ast_grep<｜tool▁sep｜>{\"i\":\"…\",\"pat\":\"import { $$$IMPORTS } from \\\"react\\\"\",\"path\":\"src/**/*.ts\"}<｜tool▁call▁end｜>\n</example>\n# Arrow functions assigned to a const\n<example>\n<｜tool▁call▁begin｜>ast_grep<｜tool▁sep｜>{\"i\":\"…\",\"pat\":\"const $NAME = ($$$ARGS) => $BODY\",\"path\":\"src/utils/**/*.ts\"}<｜tool▁call▁end｜>\n</example>\n# Method call on any object, ignoring method name with `$_`\n<example>\n<｜tool▁call▁begin｜>ast_grep<｜tool▁sep｜>{\"i\":\"…\",\"pat\":\"logger.$_($$$ARGS)\",\"path\":\"src/**/*.ts\"}<｜tool▁call▁end｜>\n</example>\n# Loosest existence check for a symbol in one file\n<example>\n<｜tool▁call▁begin｜>ast_grep<｜tool▁sep｜>{\"i\":\"…\",\"pat\":\"processItems\",\"path\":\"src/worker.ts\"}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "pat": {
+                            "type": "string",
+                            "description": "ast pattern"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "file, directory, glob, or internal URL to search; pass several as a semicolon-delimited list (\"src; tests\"). Omitted -> searches the workspace root (\".\")"
+                        },
+                        "skip": {
+                            "type": "number",
+                            "description": "matches to skip"
+                        }
+                    },
+                    "required": [
+                        "pat",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "ast_edit",
+                "description": "Structural AST-aware rewrites via ast-grep.\n\n<instruction>\n- Use for codemods / structural rewrites where text replace is unsafe\n- Narrow each call to one language\n- Metavariables captured in `pat` (`$A`, `$$$ARGS`) substitute into that entry's `out` template\n- **Patterns match AST structure, not text.** `$NAME` = one node (captured); `$_` = one without binding; `$$$NAME` = zero-or-more; `$$$` = zero-or-more without binding. Use `$$$NAME`, NOT `$$NAME` — the two-dollar form is invalid. Metavariable names are UPPERCASE and MUST be the whole AST node — partial text like `prefix$VAR` or `\"hello $NAME\"` does NOT work\n- Same metavariable twice → both occurrences MUST match identical code (`$A == $A` matches `x == x`, not `x == y`)\n- Rewrite patterns MUST parse as a single valid AST node. Non-standalone snippets → wrap in context, e.g. `class $_ { … }`\n- TS declarations/methods — tolerate unknown annotations: `async function $NAME($$$ARGS): $_ { $$$BODY }` or `class $_ { method($ARG: $_): $_ { $$$BODY } }`\n- Delete matched code with empty `out`: `{\"pat\":\"console.log($$$)\",\"out\":\"\"}`\n- Each rewrite is a 1:1 substitution — no splitting a capture across nodes or merging captures\n</instruction>\n\n<output>\n- Change diffs: `[src/foo.ts#1A2B]`, `-12:before`, `+12:after`\n</output>\n\n<critical>\n- Parse issues mean the rewrite is malformed or mis-scoped — fix the pattern before assuming a clean no-op\n- For one-off local text edits, you SHOULD prefer the Edit tool\n</critical>\n\n<examples>\n# Rename a call site across TypeScript files\n<example>\n<｜tool▁call▁begin｜>ast_edit<｜tool▁sep｜>{\"i\":\"…\",\"ops\":[{\"pat\":\"oldApi($$$ARGS)\",\"out\":\"newApi($$$ARGS)\"}],\"paths\":[\"src/**/*.ts\"]}<｜tool▁call▁end｜>\n</example>\n# Delete matching calls\n<example>\n<｜tool▁call▁begin｜>ast_edit<｜tool▁sep｜>{\"i\":\"…\",\"ops\":[{\"pat\":\"console.log($$$ARGS)\",\"out\":\"\"}],\"paths\":[\"src/**/*.ts\"]}<｜tool▁call▁end｜>\n</example>\n# Rewrite import source path\n<example>\n<｜tool▁call▁begin｜>ast_edit<｜tool▁sep｜>{\"i\":\"…\",\"ops\":[{\"pat\":\"import { $$$IMPORTS } from \\\"old-package\\\"\",\"out\":\"import { $$$IMPORTS } from \\\"new-package\\\"\"}],\"paths\":[\"src/**/*.ts\"]}<｜tool▁call▁end｜>\n</example>\n# Modernize to optional chaining (same metavariable enforces identity)\n<example>\n<｜tool▁call▁begin｜>ast_edit<｜tool▁sep｜>{\"i\":\"…\",\"ops\":[{\"pat\":\"$A && $A()\",\"out\":\"$A?.()\"}],\"paths\":[\"src/**/*.ts\"]}<｜tool▁call▁end｜>\n</example>\n# Swap two arguments using captures\n<example>\n<｜tool▁call▁begin｜>ast_edit<｜tool▁sep｜>{\"i\":\"…\",\"ops\":[{\"pat\":\"assertEqual($A, $B)\",\"out\":\"assertEqual($B, $A)\"}],\"paths\":[\"tests/**/*.ts\"]}<｜tool▁call▁end｜>\n</example>\n# Python — convert print calls to logging\n<example>\n<｜tool▁call▁begin｜>ast_edit<｜tool▁sep｜>{\"i\":\"…\",\"ops\":[{\"pat\":\"print($$$ARGS)\",\"out\":\"logger.info($$$ARGS)\"}],\"paths\":[\"src/**/*.py\"]}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "ops": {
+                            "type": "array",
+                            "description": "rewrite ops",
+                            "minItems": 1,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "pat": {
+                                        "type": "string",
+                                        "description": "ast pattern"
+                                    },
+                                    "out": {
+                                        "type": "string",
+                                        "description": "replacement template"
+                                    }
+                                },
+                                "required": [
+                                    "pat",
+                                    "out"
+                                ],
+                                "additionalProperties": false
+                            }
+                        },
+                        "paths": {
+                            "type": "array",
+                            "description": "files, directories, globs, or internal URLs to rewrite",
+                            "minItems": 1,
+                            "items": {
+                                "type": "string",
+                                "description": "file, directory, glob, or internal URL to rewrite"
+                            }
+                        }
+                    },
+                    "required": [
+                        "ops",
+                        "paths",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "ask",
+                "description": "Asks user when you need clarification or input during task execution.\n\n<conditions>\n- Multiple approaches exist with significantly different tradeoffs user should weigh\n</conditions>\n\n<instruction>\n- Use `recommended: <index>` to mark default (0-indexed); \" (Recommended)\" added automatically\n- Use `questions` for multiple related questions instead of asking one at a time\n- Set `multi: true` on question to allow multiple selections\n- Use short option labels; put explanatory tradeoffs in `description` instead of merging them into the label\n</instruction>\n\n<caution>\n- Provide 2-5 concise, distinct options\n</caution>\n\n<critical>\n- **Default to action.** Resolve ambiguity yourself using repo conventions, existing patterns, and reasonable defaults. Exhaust existing sources (code, configs, docs, history) before asking. Only ask when options have materially different tradeoffs the user must decide.\n- **If multiple choices are acceptable**, pick the most conservative/standard option and proceed; state the choice.\n- **Do NOT include \"Other\" option** — UI automatically adds \"Other (type your own)\" to every question.\n</critical>\n\n<examples>\n# Single question\n<example>\n<｜tool▁call▁begin｜>ask<｜tool▁sep｜>{\"i\":\"…\",\"questions\":[{\"id\":\"auth_method\",\"question\":\"Which authentication method should this API use?\",\"options\":[{\"label\":\"JWT\",\"description\":\"Bearer tokens for stateless API clients.\"},{\"label\":\"OAuth2\",\"description\":\"Delegated authorization with external identity providers.\"},{\"label\":\"Session cookies\",\"description\":\"Browser-first authentication backed by server-side sessions.\"}],\"recommended\":0}]}<｜tool▁call▁end｜>\n</example>\n# Multiple questions\n<example>\n<｜tool▁call▁begin｜>ask<｜tool▁sep｜>{\"i\":\"…\",\"questions\":[{\"id\":\"storage_type\",\"question\":\"Which storage backend?\",\"options\":[{\"label\":\"SQLite\"},{\"label\":\"PostgreSQL\"}]},{\"id\":\"auth_method\",\"question\":\"Which auth method?\",\"options\":[{\"label\":\"JWT\"},{\"label\":\"Session cookies\"}]}]}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "questions": {
+                            "type": "array",
+                            "description": "questions to ask",
+                            "minItems": 1,
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {
+                                        "type": "string",
+                                        "description": "question id"
+                                    },
+                                    "question": {
+                                        "type": "string",
+                                        "description": "question text"
+                                    },
+                                    "options": {
+                                        "type": "array",
+                                        "description": "available options",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "label": {
+                                                    "type": "string",
+                                                    "description": "display label"
+                                                },
+                                                "description": {
+                                                    "type": "string",
+                                                    "description": "optional explanatory text displayed below the label"
+                                                }
+                                            },
+                                            "required": [
+                                                "label"
+                                            ],
+                                            "additionalProperties": false
+                                        }
+                                    },
+                                    "multi": {
+                                        "type": "boolean",
+                                        "description": "allow multiple selections"
+                                    },
+                                    "recommended": {
+                                        "type": "number",
+                                        "description": "recommended option index"
+                                    }
+                                },
+                                "required": [
+                                    "id",
+                                    "question",
+                                    "options"
+                                ],
+                                "additionalProperties": false
+                            }
+                        }
+                    },
+                    "required": [
+                        "questions",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "debug",
+                "description": "Debugger access.\n\n<instruction>\n- You SHOULD prefer this over bash for program state, breakpoints, stepping, thread inspection, or interrupting a running process.\n- `action: \"launch\"` starts a session; `program` required, `adapter` optional. Python: `adapter: \"debugpy\"`, `program` = target `.py`, interpreter/script flags in `args`.\n- `action: \"attach\"` connects to a running process: `pid` (local), `port` (remote), `adapter` forces a specific debugger.\n- **Breakpoints**: `set_breakpoint`/`remove_breakpoint` with source (`file`+`line`) or function (`function`); optional `condition`.\n- **Flow control**: `continue` (resume), `step_over`/`step_in`/`step_out` (single-step), `pause` (interrupt a running program).\n- **Inspect**: `threads`, `stack_trace` (current stopped thread), `scopes` (needs `frame_id` or current stopped frame), `variables` (needs `variable_ref` or `scope_id`), `evaluate` (needs `expression`; `context: \"repl\"` for raw debugger commands), `output` (stdout/stderr/console), `sessions`, `terminate`.\n</instruction>\n\n<caution>\n- Only one active debug session at a time.\n- Valid `adapter` values: `gdb`, `lldb-dap`, `python -m debugpy.adapter`, `dlv dap` (must be installed locally).\n- `program` must be an executable file or debug target, not a directory or bare interpreter name.\n- Python debugging requires `debugpy`; `pip install debugpy` if unavailable.\n</caution>\n\n<examples>\n# Launch and inspect hang\n1. debug(action: \"launch\", program: \"./my_app\")\n2. debug(action: \"set_breakpoint\", file: \"src/main.c\", line: 42)\n3. debug(action: \"continue\")\n4. If the program appears hung: debug(action: \"pause\")\n5. Inspect state with `threads`, `stack_trace`, `scopes`, and `variables`\n# Launch a Python script with debugpy\n<example>\n<｜tool▁call▁begin｜>debug<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"launch\",\"adapter\":\"debugpy\",\"program\":\"scripts/job.py\",\"args\":[\"--flag\"]}<｜tool▁call▁end｜>\n</example>\n# Raw debugger command through repl\n<example>\n<｜tool▁call▁begin｜>debug<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"evaluate\",\"expression\":\"info registers\",\"context\":\"repl\"}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "action": {
+                            "enum": [
+                                "attach",
+                                "continue",
+                                "custom_request",
+                                "data_breakpoint_info",
+                                "disassemble",
+                                "evaluate",
+                                "launch",
+                                "loaded_sources",
+                                "modules",
+                                "output",
+                                "pause",
+                                "read_memory",
+                                "remove_breakpoint",
+                                "remove_data_breakpoint",
+                                "remove_instruction_breakpoint",
+                                "scopes",
+                                "sessions",
+                                "set_breakpoint",
+                                "set_data_breakpoint",
+                                "set_instruction_breakpoint",
+                                "stack_trace",
+                                "step_in",
+                                "step_out",
+                                "step_over",
+                                "terminate",
+                                "threads",
+                                "variables",
+                                "write_memory"
+                            ],
+                            "type": "string"
+                        },
+                        "program": {
+                            "type": "string",
+                            "description": "program path"
+                        },
+                        "args": {
+                            "type": "array",
+                            "description": "program arguments",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "adapter": {
+                            "type": "string",
+                            "description": "debugger adapter (gdb, lldb-dap, debugpy, dlv)"
+                        },
+                        "cwd": {
+                            "type": "string"
+                        },
+                        "file": {
+                            "type": "string",
+                            "description": "source file"
+                        },
+                        "line": {
+                            "type": "number",
+                            "description": "source line"
+                        },
+                        "function": {
+                            "type": "string",
+                            "description": "function name"
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "variable or data name"
+                        },
+                        "condition": {
+                            "type": "string",
+                            "description": "breakpoint condition"
+                        },
+                        "hit_condition": {
+                            "type": "string"
+                        },
+                        "expression": {
+                            "type": "string",
+                            "description": "expression to evaluate"
+                        },
+                        "context": {
+                            "type": "string",
+                            "description": "evaluate context: watch | repl | hover | variables | clipboard"
+                        },
+                        "frame_id": {
+                            "type": "number"
+                        },
+                        "scope_id": {
+                            "type": "number",
+                            "description": "scope variables reference"
+                        },
+                        "variable_ref": {
+                            "type": "number",
+                            "description": "variable reference"
+                        },
+                        "pid": {
+                            "type": "number",
+                            "description": "process id for attach"
+                        },
+                        "port": {
+                            "type": "number",
+                            "description": "remote attach port"
+                        },
+                        "host": {
+                            "type": "string",
+                            "description": "remote attach host"
+                        },
+                        "levels": {
+                            "type": "number",
+                            "description": "max stack frames"
+                        },
+                        "memory_reference": {
+                            "type": "string",
+                            "description": "memory reference or address"
+                        },
+                        "instruction_reference": {
+                            "type": "string"
+                        },
+                        "instruction_count": {
+                            "type": "number"
+                        },
+                        "instruction_offset": {
+                            "type": "number"
+                        },
+                        "count": {
+                            "type": "number",
+                            "description": "bytes to read"
+                        },
+                        "data": {
+                            "type": "string",
+                            "description": "base64 memory payload"
+                        },
+                        "data_id": {
+                            "type": "string",
+                            "description": "data breakpoint id"
+                        },
+                        "access_type": {
+                            "enum": [
+                                "read",
+                                "readWrite",
+                                "write"
+                            ],
+                            "type": "string"
+                        },
+                        "command": {
+                            "type": "string",
+                            "description": "custom dap request command"
+                        },
+                        "arguments": {
+                            "type": "object",
+                            "description": "custom request arguments",
+                            "additionalProperties": true
+                        },
+                        "offset": {
+                            "type": "number"
+                        },
+                        "resolve_symbols": {
+                            "type": "boolean"
+                        },
+                        "allow_partial": {
+                            "type": "boolean"
+                        },
+                        "start_module": {
+                            "type": "number"
+                        },
+                        "module_count": {
+                            "type": "number"
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "per-request timeout seconds"
+                        }
+                    },
+                    "required": [
+                        "action",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "eval",
+                "description": "Run one step of code in a persistent kernel.\n\n<instruction>\n**One eval call = one cell = one logical step.** State persists per language across separate eval calls, tool calls, and `task` subagents — define helpers/datasets/clients in one call, then later calls reuse them directly.\n\nWork incrementally: imports in one call, define in the next, test, then use — each its own eval call. Re-run setup ONLY after `reset`, a kernel crash, or a `NameError`/`ReferenceError` proving the state is gone. Parallelize work *within* a cell with the `parallel(thunks)` helper, not by batching steps.\n\nFields:\n\n- `language` — `\"py\"` IPython kernel, `\"js\"` persistent JavaScript VM.\n- `code` — cell body, verbatim. Newlines/quotes JSON-encoded; no fences, no headers.\n- `title` (optional) — short transcript label (e.g. `\"imports\"`).\n- `timeout` (optional) — seconds. Raise only for heavy compute or long non-agent tool calls.\n- `reset` (optional) — wipe this language's kernel first. Per-language: a `py` reset never touches the JS VM.\n\nLive event loop: use top-level `await` directly; `asyncio.run(…)` raises \"cannot be called from a running event loop\".\nJS runs under **Bun**: Bun globals/APIs are available (`Bun.file`, `Bun.write`, `Bun.$`, `fetch`, `Buffer`); top-level `await`/`return` work directly.\nOn error, fix and re-run only the failing step — prior calls' state survives.\n</instruction>\n\n<prelude>\nSame helpers + arg order, both runtimes. Python: sync, options = trailing kwargs. JS: async/`await`able, options = ONE trailing object literal, never positional (extras throw).\n```\ndisplay(value) → None\n    Cell output; figures/images/dataframes shown natively.\nprint(value, ...) → None\n    Text output.\nread(path, offset?=1, limit?=None) → str\n    File as text; offset/limit 1-indexed lines. Accepts `local://…`.\nwrite(path, content) → str\n    Write file (creates parents) → resolved path. `local://…` persists across turns/subagents.\nenv(key?=None, value?=None) → str | None | dict\n    No args → full env dict; one → value of `key`; two → set `key=value`, return value.\noutput(*ids, format?=\"raw\", query?=None, offset?=None, limit?=None) → str | dict | list[dict]\n    Task/agent output by id; one → text/dict, multiple → list.\ntool.<name>(args) → unknown\n    Invoke any session tool; `args` = its parameter object.\ncompletion(prompt, model?=\"default\", system?=None, schema?=None) → str | dict\n    Oneshot, stateless (no history/tools). `model`: \"smol\" fast | \"default\" session | \"slow\" most capable. `schema` (JSON-Schema) → structured output, parsed object.\nagent(prompt, agent?=\"task\", model?=None, label?=None, schema?=None, handle?=False) → str | dict\n    Run a subagent → final output. `agent` picks another discovered agent; omit it to use `task`. `schema` as in completion(). Background via `local://` files named in the prompt. `handle` → DAG node dict { text, output, handle: \"agent://<id>\", id, agent } (parsed under `data` when `schema` set).\n    JS: options are ONE trailing object — agent(prompt, { agent, schema, handle }).\nparallel(thunks) → list\n    Thunks through a bounded pool (wide as a `task` batch — don't pre-shrink), input order kept; returns when all finish, a throwing thunk propagates.\npipeline(items, ...stages) → list\n    Map items through one-arg stages left-to-right, barrier between stages; stage 1 gets the item, later stages the previous result.\nlog(message) → None\n    Progress line above the status tree.\nphase(title) → None\n    Phase grouping subsequent status lines.\nbudget → per-turn token budget\n    `budget.total` (ceiling or None), `budget.spent()`, `budget.remaining()` (math.inf when no ceiling), `budget.hard`.`await budget.total()` (ceiling or null), `await budget.spent()`, `await budget.remaining()` (Infinity when no ceiling), `await budget.hard()`. Ceiling: `+Nk` (advisory) or `+Nk!`/Goal Mode (hard — `agent()` won't spawn past it); spend still tracked.\n```\n</prelude>\n<dag>\nPipe handles through stage helpers to build a dependency graph — acyclic waves:\n- **Name nodes.** Capture each `agent(…, handle=True{ handle: true })` result; carries `handle` (`agent://<id>`) + `output`.\n- **Wire edges by reference.** Put an upstream node's `handle`/`output` in the dependent stage's prompt — large transcript never re-inlined. Bulk: `write(\"local://<name>.md\", …)`, pass the URI.\n- **`pipeline(items, *stages)` = staged waves**, barrier between stages (every item clears stage N before any enters N+1). **`parallel(thunks)` = one wave** of independent nodes.\n- **Isolate failure.** A raising node re-raises the lowest-index error, aborts its wave; wrap risky nodes in try/except so a failure degrades only its dependent subtree, independent branches finish.\n- **Acyclic only.** A node never waits on its own descendant.\n</dag>\n\n<critical>\nPrior top-level names (`data`, `sessions`, helpers, imports) survive into the next eval call — reuse them; NEVER re-import, re-require, or re-declare a helper. Re-read a file only if it may have changed since the last read. Re-run setup only after `reset`, a crash, or a `NameError`/`ReferenceError`.\n</critical>\n\n<examples>\n# First call — set up once\n<example>\n<｜tool▁call▁begin｜>eval<｜tool▁sep｜>{\"language\":\"py\",\"title\":\"imports\",\"code\":\"import json\\nfrom pathlib import Path\"}<｜tool▁call▁end｜>\n</example>\n# Second call — reuse, do NOT re-import\n<example>\n<｜tool▁call▁begin｜>eval<｜tool▁sep｜>{\"language\":\"py\",\"title\":\"load config\",\"code\":\"data = json.loads(read('package.json'))\\ndisplay(data)\"}<｜tool▁call▁end｜>\n</example>\n# Third call — reuse the loaded config\n<example>\n<｜tool▁call▁begin｜>eval<｜tool▁sep｜>{\"language\":\"py\",\"title\":\"scan deps\",\"code\":\"display(sorted(data['dependencies']))\"}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "language": {
+                            "description": "runtime: \"py\" for the IPython kernel, \"js\" for the persistent JS VM",
+                            "type": "string",
+                            "enum": [
+                                "js",
+                                "py"
+                            ]
+                        },
+                        "code": {
+                            "type": "string",
+                            "description": "code to run in this eval call, verbatim. Use top-level await freely."
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "short label shown in transcript (e.g. \"imports\", \"load config\")"
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "timeout for this eval call in seconds"
+                        },
+                        "reset": {
+                            "type": "boolean",
+                            "description": "wipe this language's kernel before running. Other languages are untouched."
+                        }
+                    },
+                    "required": [
+                        "language",
+                        "code"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "glob",
+                "description": "Globs files and directories via fast pattern matching, any codebase size.\n\n<instruction>\n- `path`: a glob, file, or directory. Search several at once by passing a semicolon-delimited list (`src/**/*.ts; test/**/*.ts`).\n- `gitignore` (default `true`) hides `.gitignore` matches. Set `gitignore: false` to find `.env*`, `*.log`, fresh build outputs, or anything your repo ignores.\n- `hidden` (default `true`); combine with `gitignore: false` to surface dotfiles also gitignored.\n</instruction>\n\n<output>\nMatching paths sorted by mtime (newest first), grouped under `# <dir>/` headers with basenames below; directories get a trailing `/`.\n</output>\n\n<avoid>\nOpen-ended searches needing multiple rounds of globbing/searching: you MUST use the Task tool instead.\n</avoid>\n\n<examples>\n# Glob files\n<example>\n<｜tool▁call▁begin｜>glob<｜tool▁sep｜>{\"i\":\"…\",\"path\":\"src/**/*.ts\"}<｜tool▁call▁end｜>\n</example>\n# Multiple targets — semicolon-delimited list\n<example>\n<｜tool▁call▁begin｜>glob<｜tool▁sep｜>{\"i\":\"…\",\"path\":\"src/**/*.ts; test/**/*.ts\"}<｜tool▁call▁end｜>\n</example>\n# Glob gitignored files like .env\n<example>\n<｜tool▁call▁begin｜>glob<｜tool▁sep｜>{\"i\":\"…\",\"path\":\".env*\",\"gitignore\":false}<｜tool▁call▁end｜>\n</example>\n# Glob directories matching a name (returns both files and dirs; directories are suffixed with `/`)\n<example>\n<｜tool▁call▁begin｜>glob<｜tool▁sep｜>{\"i\":\"…\",\"path\":\"**/tests\"}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "glob, file, or directory to search — a single path or a semicolon-delimited list (\"src/**/*.ts; test/**/*.ts\"). Omitted -> searches the workspace root (\".\")"
+                        },
+                        "hidden": {
+                            "type": "boolean",
+                            "description": "include hidden files"
+                        },
+                        "gitignore": {
+                            "type": "boolean",
+                            "description": "respect gitignore"
+                        },
+                        "limit": {
+                            "type": "number",
+                            "description": "max results"
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "i"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "grep",
+                "description": "Greps files using regex.\n\n<instruction>\n- Rust regex (RE2-style) — no lookaround/backreferences; use line anchors or post-filters instead of (?!…)/(?<!…).\n- `path`: SHOULD scope to a known path (e.g. `src`); pass several as a delimited list (`src; tests`).\n- Cross-line patterns detected from literal `\\n` or `\\\\n` in `pattern`.\n</instruction>\n\n<output>\n- Per matched file: snapshot tag header + numbered lines: `[src/login.ts#1A2B]`, `*42:if (user.id) {` (match), ` 43:return user;` (context). Copy header for anchored edits; ops use bare line numbers.\n</output>\n\n<critical>\n- MUST use built-in `grep` for any content search. NEVER shell out to `grep`, `rg`, `ripgrep`, `ag`, `ack`, `git grep`, `awk`, `sed`-for-search, or any CLI search via Bash — not even for one match or a quick check.\n- Open-ended search needing multiple rounds? MUST use the Task tool with the explore subagent, NOT chained `grep` calls.\n</critical>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "pattern": {
+                            "type": "string",
+                            "description": "regex pattern"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "file, directory, glob, internal URL, or \"<file>:<lines>\" selector to search; pass several as a semicolon-delimited list (\"src; tests\"). Omitted -> searches the workspace root (\".\")"
+                        },
+                        "case": {
+                            "type": "boolean",
+                            "description": "case-sensitive search"
+                        },
+                        "gitignore": {
+                            "type": "boolean",
+                            "description": "respect gitignore"
+                        },
+                        "skip": {
+                            "anyOf": [
+                                {
+                                    "type": "number",
+                                    "description": "files to skip before collecting results — use to paginate when the prior call hit the file limit"
+                                },
+                                {
+                                    "type": "null",
+                                    "description": "files to skip before collecting results — use to paginate when the prior call hit the file limit"
+                                }
+                            ],
+                            "description": "files to skip before collecting results — use to paginate when the prior call hit the file limit"
+                        }
+                    },
+                    "required": [
+                        "pattern",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "lsp",
+                "description": "Symbol-aware code intelligence from language servers — the accurate path for navigation, refactors, and diagnostics where text search or edits would miss callsites.\n\n<operations>\nPosition-based — pass `file` + `line` + `symbol` (substring on that line; append `#N` for the Nth match, e.g. `kind#2`):\n- `definition`, `type_definition`, `implementation`, `references`, `hover` — standard LSP lookups\n- `rename` — rename the symbol everywhere; **applies by default**, `apply: false` previews; needs `new_name`\n- `code_actions` — quick-fixes/refactors/imports at that position; lists by default (`query` filters by kind, e.g. `quickfix`, `source.organizeImports`), **applies one only with `apply: true` + `query`** (then `query` = action title substring or numeric index)\n\nFile / workspace:\n- `diagnostics` — errors/warnings for a path, a glob (`src/**/*.ts`), or the whole workspace (`file: \"*\"`)\n- `symbols` — `file` lists that file's symbols; `file: \"*\"` + `query` searches the workspace\n- `rename_file` — move `file` → `new_name` on disk AND rewrite imports/references through the server; applies by default\n\nServers:\n- `status`, `capabilities` — what's running / per-server capabilities (one via `file`, all via `*`)\n- `reload` — restart one server (`file`) or all (`*`); `reload *` also re-reads project LSP config\n- `request` — raw escape hatch: `query` = method (`rust-analyzer/expandMacro`, `workspace/executeCommand`), `payload` = JSON params (else auto-built from `file`/`line`/`symbol`)\n</operations>\n\n<caution>\n- `line` is 1-indexed. Project-aware `definition`/`references`/`rename` ERROR without `symbol` rather than guess the wrong identifier; a missing match or out-of-range `#N` is an explicit error, never a silent fallback.\n</caution>\n\n<critical>\n- Symbol-aware work (rename, references, definition/type/impl, code actions) MUST use `lsp` whenever a server is available — it follows shadowing, re-exports, and cross-file usages that text tools miss.\n- NEVER do a cross-file rename with `ast_edit`, `sed`, or hand edits when `lsp` `rename`/`rename_file` can — text renames silently drop callsites.\n- Reach for `code_actions` on imports, quick-fixes, and server-known refactors before editing by hand.\n</critical>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "action": {
+                            "enum": [
+                                "capabilities",
+                                "code_actions",
+                                "definition",
+                                "diagnostics",
+                                "hover",
+                                "implementation",
+                                "references",
+                                "reload",
+                                "rename",
+                                "rename_file",
+                                "request",
+                                "status",
+                                "symbols",
+                                "type_definition"
+                            ],
+                            "type": "string"
+                        },
+                        "file": {
+                            "type": "string"
+                        },
+                        "line": {
+                            "type": "number"
+                        },
+                        "symbol": {
+                            "type": "string"
+                        },
+                        "query": {
+                            "type": "string"
+                        },
+                        "new_name": {
+                            "type": "string"
+                        },
+                        "apply": {
+                            "type": "boolean"
+                        },
+                        "timeout": {
+                            "type": "number"
+                        },
+                        "payload": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "action",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "browser",
+                "description": "Drives real Chromium tab; full puppeteer access via JS.\n\n<instruction>\n- Static content (articles, docs, issues/PRs, JSON, PDFs, feeds)? `read` the URL. Browser only for JS execution, auth, interactive actions.\n- Three actions:\n  - `open` — acquire/reuse named tab (`name` defaults `\"main\"`). Optional `url` (navigate once ready), `viewport`, `dialogs: \"accept\" | \"dismiss\"` (auto-handle `alert`/`confirm`/`beforeunload`; else page hangs till you wire `page.on('dialog', …)`).\n  - `close` — release tab by `name`, or all with `all: true`. `kill: true` also kills spawned-app process trees.\n  - `run` — execute JS in existing tab. `code` = async function body; `page`, `browser`, `tab`, `display`, `assert`, `wait` in scope. Return value JSON-stringified into result; `display(value)` accumulates text/images.\n- Tabs survive `run` calls and in-process subagents — open once, reuse.\n- Browser kinds (`app` on `open`):\n  - default (no `app`) → headless Chromium with stealth patches.\n  - `app.path` → spawn absolute binary (Electron/CDP). No stealth patches — NEVER tamper with a real desktop app.\n  - `app.cdp_url` → connect to existing CDP endpoint (e.g. `http://127.0.0.1:9222`).\n  - `app.target` (with `path`/`cdp_url`) — substring on url+title picks BrowserWindow.\n- `tab` helpers; drop to raw puppeteer `page` for anything uncovered:\n  - `tab.goto(url, { waitUntil? })` — navigate.\n  - `tab.observe({ includeAll?, viewportOnly? })` — accessibility snapshot: `{ url, title, viewport, scroll, elements: [{ id, role, name, value, states, … }] }`. Ids stable until next observe/goto.\n  - `tab.ariaSnapshot(selector?, { depth?, boxes? })` — Playwright-format ARIA-tree YAML (nested roles + accessible names + `/url`/`/placeholder`), scoped to `selector` or the whole document. Every node carries a `[ref=eN]` id; `[cursor=pointer]` flags clickables. Captures dense, hierarchical structure/text that `observe()`'s flat list flattens away. Refs renumber from e1 each call and stay valid until the next `ariaSnapshot()`.\n  - `tab.ref(\"e5\")` — `[ref=eN]` from the last ariaSnapshot → element handle with the common action methods (`.click()`, `.type()`, `.fill()`, `.hover()`, `.evaluate()`, …); the primary way to act on a ref. For convenience `aria-ref=e5` also works inline in `tab.click`/`type`/`fill`/`waitFor`/`scrollIntoView` (e.g. `tab.click(\"aria-ref=e5\")`).\n  - `tab.id(n)` — id from last observe → `ElementHandle` (`.click()`, `.type()`, …).\n  - `tab.click(selector)` / `tab.type(selector, text)` / `tab.fill(selector, value)` / `tab.press(key, { selector? })` / `tab.scroll(dx, dy)`.\n  - `tab.waitFor(selector, { timeout? })` / `tab.waitForSelector(selector, { timeout?, visible?, hidden? })` — wait until attached (optionally visible/hidden); returns the `ElementHandle`.\n  - `tab.drag(from, to)` — endpoints: selector (center-to-center) or `{ x, y }` viewport point (canvases, sliders).\n  - `tab.scrollIntoView(selector)` — center in viewport; before clicking off-screen elements.\n  - `tab.select(selector, …values)` — set `<select>` option(s); returns selection. `tab.fill` NEVER works for selects.\n  - `tab.uploadFile(selector, …filePaths)` — attach files to `<input type=\"file\">`; paths relative to cwd.\n  - `tab.waitForUrl(pattern, { timeout? })` — substring or `RegExp` (matches SPA pushState nav); returns matched URL.\n  - `tab.waitForResponse(pattern, { timeout? })` — substring, `RegExp`, or `(response) => boolean`; returns puppeteer `HTTPResponse` (`.text()`/`.json()`/`.status()`/`.headers()`).\n  - `tab.waitForNavigation({ waitUntil?, timeout? })` — resolves on the next navigation. Start it BEFORE the click/submit that triggers it; after `tab.goto` (which already waits) use `tab.waitForUrl`/`tab.waitForSelector` instead.\n  - `tab.evaluate(fn, …args)` — `page.evaluate` for ad-hoc DOM reads.\n  - `tab.screenshot({ selector?, fullPage?, save?, silent? })` — capture + attach for viewing (`silent: true` skips). Pass `save` only when a later step needs the file.\n  - `tab.extract(format = \"markdown\")` — readable page content (`\"markdown\"` | `\"text\"`); throws when nothing readable.\n- Selectors: CSS + puppeteer handlers `aria/Sign in`, `text/Continue`, `xpath/…`, `pierce/…`; also Playwright-style `p-aria/…`, `p-text/…`. Playwright-only engines/pseudos (`:has-text()`, `:visible`, …) are rejected — use `text/…` or `aria/…`. A stalled action/wait fails fast with a named `tab.<op> timed out` error, never the whole-cell timeout.\n</instruction>\n\n<critical>\n- MUST `open` before `run` — `run` never creates a tab.\n- Default to `tab.observe()` for page state — structured data, actionable ids. Screenshot ONLY when appearance matters.\n- Navigation invalidates element ids — re-observe before use.\n- `code` runs with full Node access. Treat as your code, not sandboxed.\n</critical>\n\n<output>\nPer call: `display(value)` output, then `code`'s return value. `run` always produces at least a status line.\n</output>\n\n<examples>\n# Open a tab\n<example>\n<｜tool▁call▁begin｜>browser<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"open\",\"name\":\"docs\",\"url\":\"https://example.com\"}<｜tool▁call▁end｜>\n</example>\n# Read structured page data in the opened tab\n<example>\n<｜tool▁call▁begin｜>browser<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"run\",\"name\":\"docs\",\"code\":\"const obs = await tab.observe(); display(obs); return obs.elements.length;\"}<｜tool▁call▁end｜>\n</example>\n# Click an observed element by id\n<example>\n<｜tool▁call▁begin｜>browser<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"run\",\"name\":\"docs\",\"code\":\"const obs = await tab.observe(); const link = obs.elements.find(e => e.role === 'link' && e.name === 'Sign in'); assert(link, 'Sign in link missing'); await (await tab.id(link.id)).click();\"}<｜tool▁call▁end｜>\n</example>\n# Fill and submit a form via selectors\n<example>\n<｜tool▁call▁begin｜>browser<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"run\",\"name\":\"docs\",\"code\":\"await tab.fill('input[name=email]', 'me@example.com'); await tab.click('text/Continue');\"}<｜tool▁call▁end｜>\n</example>\n# Screenshot to look at the page — no save path\n<example>\n<｜tool▁call▁begin｜>browser<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"run\",\"name\":\"docs\",\"code\":\"await tab.screenshot();\"}<｜tool▁call▁end｜>\n</example>\n# Attach to an existing Electron app\n<example>\n<｜tool▁call▁begin｜>browser<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"open\",\"name\":\"cursor\",\"app\":{\"path\":\"/Applications/Cursor.app/Contents/MacOS/Cursor\"}}<｜tool▁call▁end｜>\n</example>\n# Close every tab and kill spawned-app processes\n<example>\n<｜tool▁call▁begin｜>browser<｜tool▁sep｜>{\"i\":\"…\",\"action\":\"close\",\"all\":true,\"kill\":true}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "action": {
+                            "description": "operation",
+                            "type": "string",
+                            "enum": [
+                                "close",
+                                "open",
+                                "run"
+                            ]
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "tab id (default 'main')"
+                        },
+                        "url": {
+                            "type": "string",
+                            "description": "url to open"
+                        },
+                        "app": {
+                            "type": "object",
+                            "properties": {
+                                "path": {
+                                    "type": "string",
+                                    "description": "binary path to spawn"
+                                },
+                                "cdp_url": {
+                                    "type": "string",
+                                    "description": "existing cdp endpoint"
+                                },
+                                "args": {
+                                    "type": "array",
+                                    "description": "extra cli args",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                },
+                                "target": {
+                                    "type": "string",
+                                    "description": "substring to pick a window"
+                                }
+                            },
+                            "additionalProperties": false
+                        },
+                        "viewport": {
+                            "type": "object",
+                            "properties": {
+                                "width": {
+                                    "type": "number"
+                                },
+                                "height": {
+                                    "type": "number"
+                                },
+                                "scale": {
+                                    "type": "number"
+                                }
+                            },
+                            "required": [
+                                "width",
+                                "height"
+                            ],
+                            "additionalProperties": false
+                        },
+                        "wait_until": {
+                            "description": "navigation wait condition",
+                            "type": "string",
+                            "enum": [
+                                "domcontentloaded",
+                                "load",
+                                "networkidle0",
+                                "networkidle2"
+                            ]
+                        },
+                        "dialogs": {
+                            "description": "auto-handle dialogs",
+                            "type": "string",
+                            "enum": [
+                                "accept",
+                                "dismiss"
+                            ]
+                        },
+                        "code": {
+                            "type": "string",
+                            "description": "js body to run in tab"
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "description": "timeout in seconds"
+                        },
+                        "all": {
+                            "type": "boolean",
+                            "description": "close every tab"
+                        },
+                        "kill": {
+                            "type": "boolean",
+                            "description": "also kill spawned-app browsers"
+                        }
+                    },
+                    "required": [
+                        "action",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "task",
+                "description": "Delegate work to background subagents by passing multiple items in a single `tasks[]` batch.\nExecution does not block your turn: you receive agent and job IDs immediately, and the final results deliver themselves when the subagents finish.\n\n# Delegation Strategy\n- **Maximize parallelism:** Break work into the widest possible array of `tasks[]`. NEVER serialize work that can run concurrently. Tasks touching different files or independent refactors should run in parallel; agents resolve their own file collisions live.\n- **Concurrency cap:** At most 32 subagents run at once in this session — anything beyond that just queues, so a `tasks[]` batch larger than 32 only delays results. Keep the fan-out at or under the cap.\n- **Sequence only when necessary:** The only reason to run A before B is if B strictly requires A's output to function (e.g., a core API contract or schema migration). If the missing piece is small, run them in parallel and have B ask A via `irc`!\n- **Steering delivery:** Parent-to-subagent IRC is delivered immediately as steering; subagents blocked in `job poll` / `irc wait` do not need to poll separately for it.\n- **Role matching:** Assign each subagent a specific `role` (e.g. \"Security Reviewer\", \"DB Migrator\"). Do not spawn generic workers.\n- **No overhead:** Each assignment MUST instruct its agent to skip formatters, linters, and project-wide test suites. You will run those once at the end.\n- **One-pass agents:** Prefer agents that investigate **and** edit in a single pass; only spin a read-only discovery step (e.g. `explore`) when the affected files are genuinely unknown.\n\n# Inputs\n- `agent` (optional): The base agent type to use (e.g., `explore`, `reviewer`). Defaults to `task` (the general-purpose worker) — omit it for the default worker instead of passing `agent: \"task\"`.\n- `context`: Shared project state, constraints, and contracts. Applies to the entire batch; do not duplicate this background into individual tasks.\n- `tasks[]`: Array of subagents to spawn.\n  - `assignment`: Complete, self-contained instructions. One-liners or missing acceptance criteria are PROHIBITED.\n  - `id`: A stable CamelCase identifier (≤32 chars). Generated automatically if omitted.\n  - `description`: A UI label only; the subagent NEVER sees it.\n  - `role`: The specialist this subagent embodies. Tailor per spawn; do not clone a generic worker.\n\n# Context and Communication\nSubagents start blank. They have no access to your conversation history.\n- Pass large payloads using `local://<path>` URIs, never inline text.\n\n# Format Contracts\nThe `context` field MUST follow this format:\n# Goal         ← what the batch accomplishes\n# Constraints  ← rules and session decisions\n# Contract     ← shared interfaces\n\nThe `assignment` field MUST follow this format:\n# Target       ← exact files and symbols; explicit non-goals\n# Change       ← step-by-step add/remove/rename; APIs and patterns\n# Acceptance   ← observable result; no project-wide commands\n\n# Available Agents\n### explore (READ-ONLY: no edit/write/command tools)\nFast read-only codebase scout returning compressed context for handoff\nUse ONLY for investigation and reporting; do the edits yourself or assign them to a writing agent.\n\n### plan\nSoftware architect for complex multi-file architectural decisions. NOT for simple tasks, single-file changes, or tasks completable in <5 tool calls.\n### designer\nUI/UX specialist for design implementation, review, visual refinement\n### reviewer\nCode review specialist for quality/security analysis\n### librarian\nResearches external libraries and APIs by reading source code. Returns definitive, source-verified answers.\n### Tester\nAuthoritative test writer. ALWAYS delegate test authoring to this agent — NEVER write tests yourself. Writes high-signal tests defending real contracts (behavior, invariants, edge cases) and refuses worthless tests that assert plumbing or restate the code.\n### task\nGeneral-purpose subagent with full capabilities for delegated multi-step tasks\n### sonic\nLow-reasoning agent for strictly mechanical updates or data collection only",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "context": {
+                            "type": "string"
+                        },
+                        "tasks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "assignment": {
+                                        "type": "string"
+                                    },
+                                    "id": {
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "type": "string"
+                                    },
+                                    "role": {
+                                        "type": "string",
+                                        "maxLength": 256
+                                    }
+                                },
+                                "required": [
+                                    "assignment"
+                                ],
+                                "additionalProperties": false
+                            }
+                        },
+                        "agent": {
+                            "type": "string",
+                            "default": "task"
+                        }
+                    },
+                    "required": [
+                        "context",
+                        "tasks",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "job",
+                "description": "Manages async background tasks (e.g. bash scripts, subagents).\n\nBackground tasks deliver their results automatically the moment they finish. You NEVER need to poll to retrieve output. Only use this tool if you need to intervene in the lifecycle of a task.\n\n# Interventions\n\n- **Block and wait:** Pass `poll` with specific job IDs when you are completely blocked and cannot do any other work. The call returns as soon as one watched job finishes, the wait window elapses, or an IRC / steering message interrupts the wait — NOT when all jobs finish; re-issue to keep waiting.\n  - To watch EVERY running job, issue a call with NO fields at all (no `poll`, no `cancel`, no `list`). NEVER pass an array of every running ID.\n  - A finished job's output, or the interrupting message and reason, is included in the next turn.\n- **Stop execution:** Pass `cancel` with job IDs to kill jobs that have hung, stalled, or are no longer needed. A cancel-only call returns immediately.\n- **Snapshot:** Pass `list: true` to get the current status of all jobs without waiting.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "poll": {
+                            "type": "array",
+                            "description": "job ids to wait for; omit to wait on all running jobs",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "cancel": {
+                            "type": "array",
+                            "description": "job ids to cancel",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "list": {
+                            "type": "boolean",
+                            "description": "snapshot all jobs"
+                        }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                        "i"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "irc",
+                "description": "Send and receive short text messages between the agents running in this process.\n\n# Addressing and Discovery\nThe main agent is always `Main`. Subagents inherit their task ID (e.g., `AuthLoader`). If you don't know who is currently running, use `op: \"list\"` to view all peers alongside their status, unread message count, and recent activity. Address peers by their exact ID from the roster; NEVER invent names.\n\n# Messaging Rules\nUse `op: \"send\"` to deliver a message to a specific peer or broadcast to `\"all\"`.\n- **Fire and forget:** Sending NEVER blocks. You get delivery receipts immediately (`delivered` or `failed`). Do not wait around—send your message and keep working. If a receipt says `failed`, the peer is gone; do not retry.\n- **Waking peers:** Sending a message to an `idle` or `parked` agent automatically wakes them up.\n- **Answering:** When replying to a question, use `op: \"send\"`, lead directly with your answer (NEVER quote the original message), and set `replyTo` so the recipient can correlate it.\n- **Format:** Messages MUST be plain prose. NEVER send JSON status objects. Keep it terse and share paths via `local://` or `artifact://` URLs, not pasted blobs.\n\n# Waiting and Inboxes\nMessages only arrive when the peer actively sends one—do not interrogate a peer for status.\n- If you are completely blocked and MUST wait for an answer, use `op: \"wait\"` (or `await: true` on a send). The wait returns when a matching message arrives, the timeout elapses, or any IRC / steering message interrupts the wait. Parent-agent IRC interrupts with steering-level priority.\n- No need to alternate `irc wait`, `irc inbox`, and `job poll`: waits surface cross-channel interrupts promptly. The next turn includes the interrupt reason and message.\n- To check for messages without blocking, use `op: \"inbox\"` to drain your queue.\n\n# When to Coordinate\nMessage peers instead of guessing, duplicating work, or spying.\n- Use IRC when you hit an unexpected state (e.g., missing files) or an out-of-scope decision. DM `Main` or your spawner for guidance.\n- If you overlap with another agent's work or need a file they are touching, DM them before editing.\n- NEVER use shell tools, grep, or read other sessions' files to figure out what a peer is doing. Message them directly.\n- NEVER use IRC for something a tool can answer (e.g., grepping codebase, running a build).\n\n<examples>\n# List peers\n<example>\n<｜tool▁call▁begin｜>irc<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"list\"}<｜tool▁call▁end｜>\n</example>\n# Fire-and-forget DM — same send wakes idle/parked peers\n<example>\n<｜tool▁call▁begin｜>irc<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"send\",\"to\":\"AuthLoader\",\"message\":\"Still touching src/server/auth.ts? I need to add a 401 path.\"}<｜tool▁call▁end｜>\n</example>\n# Round-trip when you cannot proceed without the answer\n<example>\n<｜tool▁call▁begin｜>irc<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"send\",\"to\":\"Main\",\"message\":\"JWT or session cookies for the auth flow?\",\"await\":true}<｜tool▁call▁end｜>\n</example>\n# Block until a specific peer answers\n<example>\n<｜tool▁call▁begin｜>irc<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"wait\",\"from\":\"AuthLoader\",\"timeoutMs\":60000}<｜tool▁call▁end｜>\n</example>\n# Drain pending messages\n<example>\n<｜tool▁call▁begin｜>irc<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"inbox\"}<｜tool▁call▁end｜>\n</example>\n# Broadcast to live peers (no replies expected)\n<example>\n<｜tool▁call▁begin｜>irc<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"send\",\"to\":\"all\",\"message\":\"About to refactor src/server/middleware/*. Anyone already in there?\"}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "op": {
+                            "description": "irc operation",
+                            "type": "string",
+                            "enum": [
+                                "inbox",
+                                "list",
+                                "send",
+                                "wait"
+                            ]
+                        },
+                        "to": {
+                            "type": "string",
+                            "description": "send: recipient agent id or \"all\""
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "send: message body"
+                        },
+                        "replyTo": {
+                            "type": "string",
+                            "description": "send: message id being answered"
+                        },
+                        "await": {
+                            "type": "boolean",
+                            "description": "send: wait for the recipient's reply (invalid with to:\"all\")"
+                        },
+                        "from": {
+                            "type": "string",
+                            "description": "wait: only accept a message from this agent id"
+                        },
+                        "timeoutMs": {
+                            "type": "number",
+                            "description": "wait: timeout in milliseconds (0 waits indefinitely)"
+                        },
+                        "peek": {
+                            "type": "boolean",
+                            "description": "inbox: list messages without consuming them"
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "todo",
+                "description": "**Tasks referenced by verbatim content string, NEVER an auto-generated ID — no \"task-1\"/\"task-N\" exists. Pass the content text in the `task` field.**\n\nOn each completion the earliest still-open task (in phase order) auto-promotes to `in_progress`. Completing tasks out of phase order can move this pointer **back** to an earlier phase — that is expected; completed tasks are never reverted.\n\n## Operations\n\n|`op`|Required fields|Effect|\n|---|---|---|\n|`init`|`list: [{phase, items: string[]}]`|Initialize full list (replaces existing)|\n|`init`|`items: string[]`|Flattened single-phase init|\n|`start`|`task`|Mark in progress|\n|`done`|`task` or `phase`|Mark completed|\n|`drop`|`task` or `phase`|Mark abandoned|\n|`rm`|`task` or `phase` (optional)|Remove task or phase's tasks; omit both to clear the list|\n|`append`|`phase`, `items: string[]`|Append tasks to `phase`; lazily creates phase|\n|`view`|—|Read-only: echo the list, no modify|\n\n## Anatomy\n- **Task content**: 5–10 words; what, not how. Unique identifier.\n- **Phase name**: short noun phrase (e.g. `Foundation`, `Auth`, `Verification`). Unique identifier. NEVER prefix `1.`, `A)`, `Phase 1:`.\n\n## Rules\n- Mark tasks done immediately after finishing.\n- Complete phases in order.\n- Blocked? `append` a task to the active phase to unblock, or `drop`.\n- Keep `task`/`phase` strings stable once introduced.\n- Lost the exact task text? `view` echoes the list — NEVER guess from memory; a mismatched `task` string is an error.\n\n## When to create a list\n- Task requires 3+ distinct steps\n- User explicitly requests one\n- User provides a set of tasks\n- New instructions arrive mid-task — capture before proceeding\n\n<critical>\nUser hands you a multi-step plan — phased todo, numbered/bulleted checklist, or \"N bugs/items/tasks\":\n- You MUST `init` the list with EVERY item as its own task before working.\n- Enumerate all; NEVER summarize into fewer tasks, sample \"the important ones\", drop items, or track the rest from memory.\n</critical>\n\n<examples>\n# Initial setup (multi-phase)\n<example>\n<｜tool▁call▁begin｜>todo<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"init\",\"list\":[{\"phase\":\"Foundation\",\"items\":[\"Scaffold crate\",\"Wire workspace\"]},{\"phase\":\"Auth\",\"items\":[\"Port credential store\",\"Wire OAuth providers\"]},{\"phase\":\"Verification\",\"items\":[\"Run cargo test\"]}]}<｜tool▁call▁end｜>\n</example>\n# View current state (read-only)\n<example>\n<｜tool▁call▁begin｜>todo<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"view\"}<｜tool▁call▁end｜>\n</example>\n# Initial setup (single phase)\n<example>\n<｜tool▁call▁begin｜>todo<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"init\",\"list\":[{\"phase\":\"Implementation\",\"items\":[\"Apply fix\",\"Run tests\"]}]}<｜tool▁call▁end｜>\n</example>\n# Complete one task\n<example>\n<｜tool▁call▁begin｜>todo<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"done\",\"task\":\"Wire workspace\"}<｜tool▁call▁end｜>\n</example>\n# Complete a whole phase\n<example>\n<｜tool▁call▁begin｜>todo<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"done\",\"phase\":\"Auth\"}<｜tool▁call▁end｜>\n</example>\n# Remove all tasks\n<example>\n<｜tool▁call▁begin｜>todo<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"rm\"}<｜tool▁call▁end｜>\n</example>\n# Drop one task\n<example>\n<｜tool▁call▁begin｜>todo<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"drop\",\"task\":\"Run cargo test\"}<｜tool▁call▁end｜>\n</example>\n# Append tasks to a phase\n<example>\n<｜tool▁call▁begin｜>todo<｜tool▁sep｜>{\"i\":\"…\",\"op\":\"append\",\"phase\":\"Auth\",\"items\":[\"Handle retries\",\"Run tests\"]}<｜tool▁call▁end｜>\n</example>\n</examples>",
+                "parameters": {
+                    "type": "object",
+                    "description": "apply a single todo operation",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "op": {
+                            "description": "operation to apply",
+                            "type": "string",
+                            "enum": [
+                                "append",
+                                "done",
+                                "drop",
+                                "init",
+                                "rm",
+                                "start",
+                                "view"
+                            ]
+                        },
+                        "list": {
+                            "type": "array",
+                            "description": "phased task list (init)",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "phase": {
+                                        "type": "string",
+                                        "description": "phase name"
+                                    },
+                                    "items": {
+                                        "type": "array",
+                                        "description": "tasks for this phase",
+                                        "minItems": 1,
+                                        "items": {
+                                            "type": "string",
+                                            "description": "task content"
+                                        }
+                                    }
+                                },
+                                "required": [
+                                    "phase",
+                                    "items"
+                                ],
+                                "additionalProperties": false
+                            }
+                        },
+                        "task": {
+                            "type": "string",
+                            "description": "task content"
+                        },
+                        "phase": {
+                            "type": "string",
+                            "description": "phase name"
+                        },
+                        "items": {
+                            "type": "array",
+                            "description": "tasks to append",
+                            "items": {
+                                "type": "string",
+                                "description": "task content"
+                            }
+                        }
+                    },
+                    "required": [
+                        "op",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_search",
+                "description": "Searches the web for up-to-date information beyond knowledge cutoff.\n\n<instruction>\n- You SHOULD prefer primary sources (papers, official docs) and corroborate key claims with multiple sources\n- You MUST include links for cited sources in the final response\n</instruction>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "query": {
+                            "type": "string"
+                        },
+                        "recency": {
+                            "enum": [
+                                "day",
+                                "month",
+                                "week",
+                                "year"
+                            ],
+                            "type": "string"
+                        },
+                        "limit": {
+                            "type": "number"
+                        },
+                        "max_tokens": {
+                            "type": "number"
+                        },
+                        "temperature": {
+                            "type": "number"
+                        },
+                        "num_search_results": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "query",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "write",
+                "description": "Creates or overwrites file at specified path.\n\n<conditions>\n- Creating new files explicitly required by task\n- Replacing entire file contents when editing would be more complex\n- Supports `.tar`, `.tar.gz`, `.tgz`, and `.zip` archive entries via `archive.ext:path/inside/archive`\n- Supports SQLite row operations via `db.sqlite:table` (insert), `db.sqlite:table:key` (update with JSON content, delete with empty content)\n</conditions>\n\n<critical>\n- You SHOULD use Edit tool for modifying existing files\n- You NEVER create documentation files (*.md, README) unless explicitly requested\n- You NEVER use emojis unless requested\n</critical>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "file path"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "file content"
+                        }
+                    },
+                    "required": [
+                        "path",
+                        "content",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "resolve",
+                "description": "Resolves a pending action — apply or discard. Valid only when a pending action exists; errors otherwise.\n- `action` (required): `\"apply\"` persists/submits; `\"discard\"` rejects.\n- `reason` (required): one short sentence explaining why.\n- `extra` (optional): free-form metadata. Plan-approval gate? Supply `extra.title` (kebab/PascalCase slug = approved plan filename). Unused for preview actions (e.g. `ast_edit`).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "enum": [
+                                "apply",
+                                "discard"
+                            ],
+                            "type": "string"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "reason for action"
+                        },
+                        "extra": {
+                            "type": "object",
+                            "description": "free-form metadata",
+                            "additionalProperties": true
+                        }
+                    },
+                    "required": [
+                        "action",
+                        "reason"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "generate_image",
+                "description": "Generates or edits images.\n\n<instructions>\n- You MUST provide a single detailed `subject` prompt for image generation or editing.\n- When using multiple `input`, you SHOULD describe each image's role directly in `subject`, e.g. `Image 1` for composition reference, `Image 2` for lighting reference, `Image 3` for background.\n- For text: you SHOULD add \"sharp, legible, correctly spelled\" for important text; keep text short.\n</instructions>",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "i": {
+                            "type": "string",
+                            "description": "concise intent"
+                        },
+                        "subject": {
+                            "type": "string",
+                            "description": "main subject"
+                        },
+                        "action": {
+                            "type": "string",
+                            "description": "what subject is doing"
+                        },
+                        "scene": {
+                            "type": "string",
+                            "description": "location or environment"
+                        },
+                        "composition": {
+                            "type": "string",
+                            "description": "camera angle and framing"
+                        },
+                        "lighting": {
+                            "type": "string",
+                            "description": "lighting setup"
+                        },
+                        "style": {
+                            "type": "string",
+                            "description": "artistic style"
+                        },
+                        "text": {
+                            "type": "string",
+                            "description": "text to render"
+                        },
+                        "changes": {
+                            "type": "array",
+                            "description": "edits to make",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "aspect_ratio": {
+                            "description": "aspect ratio",
+                            "type": "string",
+                            "enum": [
+                                "16:9",
+                                "1:1",
+                                "2:3",
+                                "3:2",
+                                "3:4",
+                                "4:3",
+                                "9:16"
+                            ]
+                        },
+                        "image_size": {
+                            "description": "image size",
+                            "type": "string",
+                            "enum": [
+                                "1024x1024",
+                                "1024x1536",
+                                "1536x1024"
+                            ]
+                        },
+                        "input": {
+                            "type": "array",
+                            "description": "input images",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "path": {
+                                        "type": "string",
+                                        "description": "input image path"
+                                    },
+                                    "data": {
+                                        "type": "string",
+                                        "description": "base64 image data"
+                                    },
+                                    "mime_type": {
+                                        "type": "string",
+                                        "description": "mime type"
+                                    }
+                                },
+                                "additionalProperties": false
+                            }
+                        }
+                    },
+                    "required": [
+                        "subject",
+                        "i"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        }
+    ],
+    "max_completion_tokens": 64000
+}
