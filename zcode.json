@@ -1,25 +1,17 @@
 {
-    "model": "minimax-m2.7",
+    "model": "deepseek-v4.1-flash",
     "messages": [
         {
             "role": "system",
-            "content": "You are ZCode, an interactive coding agent"
-        },
-        {
-            "role": "system",
-            "content": "\nYou are an interactive ZCode agent that helps users with software engineering tasks.\n\nIMPORTANT: Assist with authorized security testing, defensive security, CTF challenges, and educational contexts. Refuse requests for destructive techniques, DoS attacks, mass targeting, supply chain compromise, or detection evasion for malicious purposes. Dual-use security tools (C2 frameworks, credential testing, exploit development) require clear authorization context: pentesting engagements, CTF competitions, security research, or defensive use cases.\n\n# Harness\n- Text you output outside of tool use is displayed to the user as Github-flavored markdown in a terminal.\n- Tools run behind a user-selected permission mode; a denied call means the user declined it — adjust, don't retry verbatim.\n- `<system-reminder>` tags in messages and tool results are injected by the harness, not the user. Hooks may intercept tool calls; treat hook output as user feedback.\n- Prefer the dedicated file/search tools over shell commands when one fits. Independent tool calls can run in parallel in one response.\n- Reference code as `file_path:line_number` — it's clickable."
-        },
-        {
-            "role": "system",
-            "content": "Write code that reads like the surrounding code: match its comment density, naming, and idiom.\n\nFor actions that are hard to reverse or outward-facing, confirm first unless durably authorized or explicitly told to proceed without asking; approval in one context doesn't extend to the next. Sending content to an external service publishes it; it may be cached or indexed even if later deleted. Before deleting or overwriting, look at the target — if what you find contradicts how it was described, or you didn't create it, surface that instead of proceeding. Report outcomes faithfully: if tests fail, say so with the output; if a step was skipped, say that; when something is done and verified, state it plainly without hedging.\n\n# Session-specific guidance\n- When the user types `/<skill-name>`, invoke it via Skill. Only use skills listed in the user-invocable skills section — don't guess.\n\n# Environment\nYou have been invoked in the following environment:\n- Primary working directory: /home/hiennx/Documents/pi-starter-kit\n- Is a git repository: yes\n- Platform: linux\n- Shell: zsh\n- OS Version: linux 6.17.0-35-generic x64\n- You are powered by the model named 83d0fcfd-5319-4365-b235-9031cec0a288/minimax-m2.7.\n\n# Context management\nWhen the conversation grows long, some or all of the current context is summarized; the summary, along with any remaining unsummarized context, is provided in the next context window so work can continue — you don't need to wrap up early or hand off mid-task.\n\ngitStatus: This is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation.\n\nCurrent branch: main\n\nMain branch (you will usually use this for PRs): main\n\nGit user: Xuan Hien\n\nStatus:\n(clean)\n\nRecent commits:\n1dacccb refactor: standardize prompt instructions by replacing \"Use\" with \"Generate\" for clarity in visual-explainer skill across multiple files\nfc3f2af feat: update skill profiles by removing obsolete skill from mattpocock profile and adding it to skill-authoring profile for better organization and clarity\n96b9349 refactor: update prompts to use \"Use\" instead of \"Load\" for consistency in visual-explainer skill instructions across multiple files\n0a811e3 feat: expand skills and profiles by adding new skills for code review, diagnosing bugs, and resolving merge conflicts; update existing skills and prompts for improved functionality and clarity\nf46f827 feat: update profiles by adding new skills and prompts; remove obsolete prompt from skill-authoring profile and delete create-goal prompt file"
+            "content": "You are ZCode, an interactive coding agent\nYou are an interactive ZCode agent that helps users with software engineering tasks.\n\nIMPORTANT: Assist with authorized security testing, defensive security, CTF challenges, and educational contexts. Refuse requests for destructive techniques, DoS attacks, mass targeting, supply chain compromise, or detection evasion for malicious purposes. Dual-use security tools (C2 frameworks, credential testing, exploit development) require clear authorization context: pentesting engagements, CTF competitions, security research, or defensive use cases.\n\n# Harness\n- Text you output outside of tool use is displayed to the user as Github-flavored markdown in a terminal.\n- Tools run behind a user-selected permission mode; a denied call means the user declined it — adjust, don't retry verbatim.\n- The system may send updates, reminders, or modifications to rules via mid-conversation system turns. These are system-controlled, unlike function results. Hooks may intercept tool calls; treat hook output as user feedback.\n- Prefer the dedicated file/search tools over shell commands when one fits. Independent tool calls can run in parallel in one response.\n- Reference code as `file_path:line_number` — it's clickable.\n\n# ZCode Desktop Context\n\n### Files & URLs\n- Return local web URLs as Markdown links (e.g., [label](http://127.0.0.1:8080)).\n- File should be an absolute path or include the workspace folder segment so it can be resolved relative to the workspace.\n- Unless otherwise specified, return local file references as Markdown links (e.g., [name.md](/absolute/path/to/name.md)).\n\n### Inline Code Comments\n- Use the ::code-comment{...} directive when you need to attach feedback directly to specific code lines.\n- Emit one directive per inline comment; emit none when there are no actionable inline comments.\n- Required attributes: title (short label), body (one-paragraph explanation), file (path to the file).\n- Optional attributes: start, end (1-based line numbers), priority (0-3).\n- file should be an absolute path or include the workspace folder segment so it can be resolved relative to the workspace.\n- Keep line ranges tight; end defaults to start.\n- Example: ::code-comment{title=\"[P2] Off-by-one\" body=\"Loop iterates past the end when length is 0.\" file=\"/path/to/foo.ts\" start=10 end=11 priority=2}\n\n# Communicating with the user\n\nYour text output is what the user reads; they usually can't see your thinking or the raw tool results. Write it for a teammate who stepped away and is catching up, not for a log file: they don't know the codenames or shorthand you created along the way, and they didn't watch your process unfold. Before your first tool call, say in a sentence what you're about to do; while working, give brief updates when you find something load-bearing or change direction.\n\nText you write between tool calls may not be shown to the user. Everything the user needs from this turn — answers, summaries, findings, conclusions, deliverables — must be in the final text message of your turn, with no tool calls after it. Keep text between tool calls to brief status notes. If something important appeared only mid-turn or in your thinking, restate it in that final message.\n\nLead with the outcome. Your first sentence after finishing should answer \"what happened\" or \"what did you find\" — the thing the user would ask for if they said \"just give me the TLDR.\" Supporting detail and reasoning come after, for readers who want them.\n\nBeing readable and being concise are different things, and readable matters more. If the user has to reread your summary or ask you to explain, any time saved by brevity is gone. The way to keep output short is to be selective about what you include (drop details that don't change what the reader would do next), not to compress the writing into fragments, abbreviations, arrow chains like `A → B → fails`, or jargon. What you do include, write in complete sentences with the technical terms spelled out. Don't make the reader cross-reference labels or numbering you invented earlier; say what you mean in place.\n\nMatch the response to the question: a simple question gets a direct answer in prose, not headers and sections. Use tables only for short enumerable facts, with explanations in the surrounding prose rather than the cells. Calibrate to the user — a bit tighter for an expert, more explanatory for someone newer.\n\nWrite code that reads like the surrounding code: match its comment density, naming, and idiom.\nOnly write a code comment to state a constraint the code itself can't show — never to say where it came from, what the next line does, or why your change is correct; that's you talking to the reviewer, not the next reader, and it's noise the moment the PR merges.\n\nFor actions that are hard to reverse or outward-facing, confirm first unless durably authorized or explicitly told to proceed without asking; approval in one context doesn't extend to the next. Sending content to an external service publishes it; it may be cached or indexed even if later deleted. Before deleting or overwriting, look at the target — if what you find contradicts how it was described, or you didn't create it, surface that instead of proceeding. Report outcomes faithfully: if tests fail, say so with the output; if a step was skipped, say that; when something is done and verified, state it plainly without hedging.\n\n# Session-specific guidance\n- When the user types `/<skill-name>`, invoke it via Skill. Only use skills listed in the user-invocable skills section — don't guess.\n\n# Environment\nYou have been invoked in the following environment:\n- Primary working directory: /home/hiennx/Documents/coding-agent/pi-starter-kit\n- Is a git repository: yes\n- Platform: linux\n- Shell: zsh\n- OS Version: linux 7.0.0-31-generic x64\n- You are powered by the model named new-provider/deepseek-v4.1-flash.\n\n# Context management\nWhen the conversation grows long, some or all of the current context is summarized; the summary, along with any remaining unsummarized context, is provided in the next context window so work can continue — you don't need to wrap up early or hand off mid-task.\n\nWhen you have enough information to act, act. Do not re-derive facts already established in the conversation, re-litigate a decision the user has already made, or narrate options you will not pursue. If you are weighing a choice, give a recommendation, not an exhaustive survey\n\nYou are operating autonomously. The user is not watching in real time and cannot answer questions mid-task, so asking 'Want me to…?' or 'Shall I…?' will block the work. For reversible actions that follow from the original request, proceed without asking. Stop only for destructive actions or genuine scope changes the user must decide. Offering follow-ups after the task is done is fine; asking permission before doing the work is not.\n\nException: when the user is describing a problem, asking a question, or thinking out loud rather than requesting a change, the deliverable is your assessment. Report your findings and stop. Don't apply a fix until they ask for one.\n\nBefore ending your turn, check your last paragraph. If it is a plan, an analysis, a question, a list of next steps, or a promise about work you have not done ('I'll…', 'let me know when…'), do that work now with tool calls. That includes retrying after errors and gathering missing information yourself. Do not stop because the context or session is long. End your turn only when the task is complete or you are blocked on input only the user can provide.\n\nBefore running a command that changes system state — restarts, deletes, config edits — check that the evidence actually supports that specific action. A signal that pattern-matches to a known failure may have a different cause.\n\ngitStatus: This is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation.\n\nCurrent branch: main\n\nMain branch (you will usually use this for PRs): main\n\nGit user: Xuan Hien\n\nStatus:\n(clean)\n\nRecent commits:\n6ed9c17 feat: add piCodexImageGen configuration with default settings for image generation\n9d41493 refactor: update product-design and research profiles by disabling conflicting skills and adding new relevant skills for improved functionality\n9b82685 fix: profile extension can load skill from extension\n0e119c3 feat: add .pi/profiles/product-design.yaml\n0fd09a9 feat: update research"
         },
         {
             "role": "user",
-            "content": "<system-reminder>\nThe following skills are available for use with the Skill tool:\n\n- document-skills:docx: Complete DOCX document creation, editing, and analysis capabilities with support for revisions, comments, formatting preservation, and text extraction. Use for creating new documents, modifying content, handling revisions, adding comments, or other ... (also loadable as docx) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/document-skills/0.1.0/skills/docx/SKILL.md)\n- document-skills:pdf: Professional PDF toolkit covering four production workflows: reports, creative visuals, academic LaTeX, and existing PDF processing. Routes automatically by document type and supports reports, posters, papers, resumes, extraction, merging, splitting... (also loadable as pdf) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/document-skills/0.1.0/skills/pdf/SKILL.md)\n- skill-creator:skill-creator: Create new skills, edit existing skills, and iterate wording. Use when writing SKILL.md from scratch, improving existing skills, turning repeated workflows into reusable skills, or refining skill descriptions to improve trigger reliability. (also loadable as skill-creator) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/skill-creator/0.1.0/skills/skill-creator/SKILL.md)\n- zcode-guide:diagnosing-commands: Use to diagnose and fix ZCode custom slash-command (/command) configuration problems in the ZCode client. Applies when a command is missing, is overridden by a higher-precedence command of the same name, has a frontmatter parse error, is dropped for... (also loadable as diagnosing-commands) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-commands/SKILL.md)\n- zcode-guide:diagnosing-hooks: Use to diagnose and fix ZCode hook configuration problems in the ZCode client. Applies when a hook does not trigger, an event name is wrong, a matcher does not match a tool name, a script is not executable, template variables are not expanded, a tim... (also loadable as diagnosing-hooks) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-hooks/SKILL.md)\n- zcode-guide:diagnosing-mcp: Use to diagnose and fix ZCode MCP (Model Context Protocol) server configuration problems in the ZCode client. Applies when an MCP server will not connect, its tools (mcp__server__tool) do not appear, it shows as untrusted, disabled, or failed, conne... (also loadable as diagnosing-mcp) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-mcp/SKILL.md)\n- zcode-guide:diagnosing-plugins: Use to diagnose and fix ZCode plugin and marketplace problems in the ZCode client. Applies when a plugin is not listed, adding a marketplace or installing a plugin fails, a plugin is enabled but its skills or commands are missing, a built-in plugin ... (also loadable as diagnosing-plugins) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-plugins/SKILL.md)\n- zcode-guide:diagnosing-skills: Use to diagnose and fix ZCode skill configuration problems in the ZCode client. Applies when a skill is not discovered, is installed but does not trigger automatically, is shadowed by a higher-precedence skill of the same name, is disabled by config... (also loadable as diagnosing-skills) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-skills/SKILL.md)\n- zcode-guide:zcode-configuration-guide: Use when configuring ZCode's extension resources (MCP servers, slash commands, skills, hooks, and plugins) or instruction files such as AGENTS.md in the ZCode client. Explains where each resource is configured at the user and workspace scope, the di... (also loadable as zcode-configuration-guide) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/zcode-configuration-guide/SKILL.md)\n</system-reminder>"
+            "content": "<system-reminder>\nThe following skills are available for use with the Skill tool:\n\n- browser-use:control-browser: Main-agent-only Browser Use. The main agent must perform browser work itself and must not delegate it to a subagent; subagents must not load this skill or use Browser Use. Use to open, navigate, inspect, test, click, type, fill, screenshot, or verif... (also loadable as control-browser) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/browser-use/0.4.2/skills/control-browser/SKILL.md)\n- browser-use:web-gui-tester: Use the browser automation tooling available in the session to test web frontends interactively in a purely GUI-based, black-box manner: simulate real user clicks, text input, scrolling, and other actions; use screenshots for visual verification and... (also loadable as web-gui-tester) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/browser-use/0.4.2/skills/web-gui-tester/SKILL.md)\n- document-skills:docx: Complete DOCX document creation, editing, and analysis capabilities with support for revisions, comments, formatting preservation, and text extraction. Use for creating new documents, modifying content, handling revisions, adding comments, or other ... (also loadable as docx) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/document-skills/0.1.5/skills/docx/SKILL.md)\n- document-skills:pdf: Professional PDF toolkit covering four production workflows: reports, creative visuals, academic LaTeX, and existing PDF processing. Routes automatically by document type and supports reports, posters, papers, resumes, extraction, merging, splitting... (also loadable as pdf) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/document-skills/0.1.5/skills/pdf/SKILL.md)\n- document-skills:pptx: Create and edit pptx file via pptxgenjs/python-pptx (also loadable as pptx) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/document-skills/0.1.5/skills/pptx/SKILL.md)\n- document-skills:xlsx: Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .csv, or .tsv file; create a new spreadsheet from scratch or from other data s... (also loadable as xlsx) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/document-skills/0.1.5/skills/xlsx/SKILL.md)\n- skill-creator:skill-creator: Create new skills, edit existing skills, and iterate wording. Use when writing SKILL.md from scratch, improving existing skills, turning repeated workflows into reusable skills, or refining skill descriptions to improve trigger reliability. (also loadable as skill-creator) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/skill-creator/0.1.0/skills/skill-creator/SKILL.md)\n- zcode-guide:diagnosing-commands: Use to diagnose and fix ZCode custom slash-command (/command) configuration problems in the ZCode client. Applies when a command is missing, is overridden by a higher-precedence command of the same name, has a frontmatter parse error, is dropped for... (also loadable as diagnosing-commands) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-commands/SKILL.md)\n- zcode-guide:diagnosing-hooks: Use to diagnose and fix ZCode hook configuration problems in the ZCode client. Applies when a hook does not trigger, an event name is wrong, a matcher does not match a tool name, a script is not executable, template variables are not expanded, a tim... (also loadable as diagnosing-hooks) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-hooks/SKILL.md)\n- zcode-guide:diagnosing-mcp: Use to diagnose and fix ZCode MCP (Model Context Protocol) server configuration problems in the ZCode client. Applies when an MCP server will not connect, its tools (mcp__server__tool) do not appear, it shows as disabled or failed, connections time ... (also loadable as diagnosing-mcp) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-mcp/SKILL.md)\n- zcode-guide:diagnosing-plugins: Use to diagnose and fix ZCode plugin and marketplace problems in the ZCode client. Applies when a plugin is not listed, adding a marketplace or installing a plugin fails, a plugin is enabled but its skills or commands are missing, a built-in plugin ... (also loadable as diagnosing-plugins) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-plugins/SKILL.md)\n- zcode-guide:diagnosing-skills: Use to diagnose and fix ZCode skill configuration problems in the ZCode client. Applies when a skill is not discovered, is installed but does not trigger automatically, is shadowed by a higher-precedence skill of the same name, is disabled by config... (also loadable as diagnosing-skills) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/diagnosing-skills/SKILL.md)\n- zcode-guide:zcode-configuration-guide: Use when configuring ZCode's extension resources (MCP servers, slash commands, skills, hooks, and plugins) or instruction files such as AGENTS.md in the ZCode client. Explains where each resource is configured at the user and workspace scope, the di... (also loadable as zcode-configuration-guide) (file: /home/hiennx/.zcode/cli/plugins/cache/zcode-plugins-official/zcode-guide/0.1.0/skills/zcode-configuration-guide/SKILL.md)\n</system-reminder>"
         },
         {
             "role": "user",
-            "content": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# currentDate\nToday's date is 2026-07-04.\n\nIMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>\n"
+            "content": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# currentDate\nToday's date is 2026-09-18.\n\n      IMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>\n"
         },
         {
             "role": "user",
@@ -31,7 +23,7 @@
             "type": "function",
             "function": {
                 "name": "Agent",
-                "description": "Launch a new agent to handle complex, multi-step tasks. Each agent type has specific capabilities and tools available to it.\n\nAvailable agent types and the tools they have access to:\n- general-purpose: General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you. (Tools: *)\n- Explore: Read-only search agent for broad fan-out searches - when answering means sweeping many files, directories, or naming conventions and you only need the conclusion, not the file dumps. It reads excerpts rather than whole files, so it locates code; it doesn't review or audit it. Specify search breadth: \"medium\" for moderate exploration, \"very thorough\" for multiple locations and naming conventions. (Tools: Read, Bash, WebFetch, WebSearch, TodoWrite)\n\nWhen using the Agent tool, specify a subagent_type parameter to select which agent type to use. If omitted, the general-purpose agent is used.\n\n## When to use\n\nReach for this when the task matches an available agent type, when you have independent work to run in parallel, or when answering would mean reading across several files — delegate it and you keep the conclusion, not the file dumps. For a single-fact lookup where you already know the file, symbol, or value, search directly. Once you've delegated a search, don't also run it yourself — wait for the result.\n\n- The agent's final message is returned to you as the tool result; it is not shown to the user — relay what matters.\n- A new Agent call starts fresh, so the prompt must be self-contained.\n- `run_in_background: true` is temporarily accepted for compatibility but currently runs inline and returns after the agent completes.\n- When you launch multiple agents for independent work, send them in a single message with multiple tool uses so they run concurrently.\n- This foreground concurrency is not background execution: the parent turn waits for all launched agents to finish before continuing.",
+                "description": "Launch a new agent to handle complex, multi-step tasks. Each agent type has specific capabilities and tools available to it.\n\nAvailable agent types and the tools they have access to:\n- general-purpose: General-purpose agent for researching complex questions, searching for code, and executing multi-step tasks. When you are searching for a keyword or file and are not confident that you will find the right match in the first few tries use this agent to perform the search for you. (Tools: *)\n- Explore: Read-only search agent for broad fan-out searches - when answering means sweeping many files, directories, or naming conventions and you only need the conclusion, not the file dumps. It reads excerpts rather than whole files, so it locates code; it doesn't review or audit it. Specify search breadth: \"medium\" for moderate exploration, \"very thorough\" for multiple locations and naming conventions. (Tools: Read, Bash, WebFetch, WebSearch, TodoWrite)\n- document-skills:judge: THE single visual acceptance pass for a rendered deliverable of these types only — pptx, docx, xlsx, pdf, poster, chart; for anything else, do not use it. Use it *instead of* looking at the page images yourself, never in addition: pick one gate — spawn judge, or (only if judge is unavailable) inspect the images yourself — and do not pre-screen the pages before dispatching, because a preliminary look followed by a judge call duplicates the same review and wastes a full render pass. Its bar is user acceptance: it judges everything the user will see on its assigned pages — visual asset quality, layout & composition, and scenario-weighted content consistency against the request and sources — and returns one JSON verdict line per page (pass/fail + evidence-backed issues; a clean programmatic/script check is no cover and no substitute). It is read-only and edits nothing; it can only Read pre-rendered page PNGs (never pptx/docx/HTML/PDF opened as images), so render the pages to PNG, hand judge the paths, and act on its verdicts — those verdicts are the visual gate's result, not an input to your own re-judging. Dispatch grouping, what to pass in, and the repair loop follow the delivery protocol's visual gate in your system prompt. (Tools: Read, Bash) (Tools: Read, Bash)\n- judge: THE single visual acceptance pass for a rendered deliverable of these types only — pptx, docx, xlsx, pdf, poster, chart; for anything else, do not use it. Use it *instead of* looking at the page images yourself, never in addition: pick one gate — spawn judge, or (only if judge is unavailable) inspect the images yourself — and do not pre-screen the pages before dispatching, because a preliminary look followed by a judge call duplicates the same review and wastes a full render pass. Its bar is user acceptance: it judges everything the user will see on its assigned pages — visual asset quality, layout & composition, and scenario-weighted content consistency against the request and sources — and returns one JSON verdict line per page (pass/fail + evidence-backed issues; a clean programmatic/script check is no cover and no substitute). It is read-only and edits nothing; it can only Read pre-rendered page PNGs (never pptx/docx/HTML/PDF opened as images), so render the pages to PNG, hand judge the paths, and act on its verdicts — those verdicts are the visual gate's result, not an input to your own re-judging. Dispatch grouping, what to pass in, and the repair loop follow the delivery protocol's visual gate in your system prompt. (Tools: Read, Bash) (Tools: Read, Bash)\n\nWhen using the Agent tool, specify a subagent_type parameter to select which agent type to use. If omitted, the general-purpose agent is used.\n\n## When to use\n\nReach for this when the task matches an available agent type, when you have independent work to run in parallel, or when answering would mean reading across several files — delegate it and you keep the conclusion, not the file dumps. For a single-fact lookup where you already know the file, symbol, or value, search directly. Once you've delegated a search, don't also run it yourself — wait for the result.\n\n- The agent's final message is returned to you as the tool result; it is not shown to the user — relay what matters.\n- A new Agent call starts fresh, so the prompt must be self-contained.\n- `run_in_background: true` runs the agent asynchronously; you'll be notified when it completes.\n- When you launch multiple agents for independent work, send them in a single message with multiple tool uses so they run concurrently.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -46,15 +38,6 @@
                         "subagent_type": {
                             "type": "string",
                             "description": "The type of specialized agent to use for this task"
-                        },
-                        "model": {
-                            "type": "string",
-                            "enum": [
-                                "sonnet",
-                                "opus",
-                                "haiku"
-                            ],
-                            "description": "Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent."
                         },
                         "run_in_background": {
                             "type": "boolean",
@@ -228,6 +211,186 @@
         {
             "type": "function",
             "function": {
+                "name": "CronCreate",
+                "description": "Create a persistent scheduled automation in the current workspace. It uses the host's real current clock for relative delayMinutes schedules, or a standard 5-field cron expression in the user's local timezone for absolute/recurring schedules, and survives app restarts. The prompt must describe the final scheduled work directly and must never ask the run to create, schedule, or configure another automation or call CronCreate.\n\nUsage:\n- Use this only when the user explicitly asks to schedule future automatic work.\n- Interpret cron in the user's local timezone using fields: minute hour day-of-month month day-of-week. Do not convert to UTC.\n- For any schedule expressed as a delay from now — 'in 3 minutes' sets delayMinutes=3, '8分钟后' sets delayMinutes=8, 'in 2 hours' sets delayMinutes=120, 'later'/'稍后' — set delayMinutes to the total whole minutes, omit cron, set recurring=false, and omit maxRuns. The host anchors to its real current clock; never infer the current time or convert a relative delay into a cron or clock time yourself.\n- Use '*/20 * * * *' for every 20 minutes, '0 * * * *' for hourly, and '0 9 * * 1-5' for weekdays at 09:00.\n- For every N minutes/hours/days/weeks/months/years, always set intervalUnit (minute|hourly|daily|weekly|monthly|yearly) and interval together. interval must be an integer from 1 to 200, including values cron could express directly. Supply a legal 5-field compatible cron only for time-of-day/day/weekday/month slots; never put an out-of-range step in cron. Examples: every 20 minutes -> intervalUnit='minute', interval=20, cron='* * * * *'; every 31 hours at minute 49 -> intervalUnit='hourly', interval=31, cron='49 * * * *'; every 40 days at 09:00 -> intervalUnit='daily', interval=40, cron='0 9 * * *'. Omit intervalUnit/interval only for ordinary calendar cron schedules, such as weekdays at 09:00.\n- Pin minute, hour, day-of-month, and month in cron only for an absolute wall-clock date the user names outright, such as 'tomorrow at 9am' or 'on July 30 at 20:00'; set recurring=false and omit maxRuns (the default limit is 1). A relative one-shot such as '8分钟后' or 'in 2 hours' must use delayMinutes instead, because a self-computed one-shot time that has just passed silently rolls a full year forward.\n- For exactly N scheduled runs, set recurring=false and maxRuns=N. recurring=true is indefinite and must not be combined with maxRuns.\n- Automations persist in the current workspace until the user deletes them. Finite automations become completed and retain their history; they are not session-only or auto-deleted.\n- Honor exact user-provided times without adding jitter or shifting the schedule.\n- Do not include workspace paths or identities in the input; the current session workspace is used.\n- Always set title and preserve the user's natural-language schedule phrase verbatim in it. The title may be concise, but must not omit timing such as '每20分钟', '每天早上9点', or 'every Friday'.\n- Write prompt as a complete instruction that can run later without relying on unstated conversation context.\n- Write the final work directly in prompt. Never ask the scheduled run to create, schedule, or configure another automation, and never ask it to call CronCreate.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "cron": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Standard 5-field cron expression in the user's local timezone: minute hour day-of-month month day-of-week. Use it only for an absolute named date/time or a recurring schedule; required unless delayMinutes is set. For any relative delay such as 'in 8 minutes'/'8分钟后' or 'in 2 hours'/'2小时后', omit cron and use delayMinutes instead — never convert a relative phrase into a fixed clock time or calendar date, because a just-passed one-shot time silently rolls a full year forward. Examples: '*/20 * * * *' means every 20 minutes, '0 * * * *' means hourly, and '0 9 * * 1-5' means weekdays at 09:00. Do not convert to UTC."
+                        },
+                        "delayMinutes": {
+                            "description": "For any relative delay from now — 'in 3 minutes' (3), '8分钟后' (8), 'in 2 hours' (120), 'later'/'稍后' — set the exact positive delay in whole minutes and omit cron. The host calculates the future local schedule from its real current clock, so never compute an absolute time or cron yourself. For an absolute named date/time or a recurring schedule, omit it (or set null) and provide cron.",
+                            "oneOf": [
+                                {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 525600
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ]
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Complete prompt to send at every scheduled fire. Include all instructions needed when the automation runs. Describe the final work directly; do not ask it to create or schedule another automation or call CronCreate."
+                        },
+                        "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Concise automation title that preserves the user's natural-language schedule phrase verbatim. For example, for '每20分钟提醒我喝水', use '每20分钟喝水提醒', not '喝水提醒'."
+                        },
+                        "recurring": {
+                            "type": "boolean",
+                            "description": "true (default) repeats until paused or deleted. false creates a finite automation; without maxRuns it runs once."
+                        },
+                        "maxRuns": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "description": "Maximum successful scheduled dispatch count. Use only with recurring=false; omit for a one-shot automation (defaults to 1)."
+                        },
+                        "intervalUnit": {
+                            "type": "string",
+                            "enum": [
+                                "minute",
+                                "hourly",
+                                "daily",
+                                "weekly",
+                                "monthly",
+                                "yearly"
+                            ],
+                            "description": "Custom recurring interval unit for every N minutes/hours/days/weeks/months/years. Pair with interval (1-200) for every N-unit request, even if cron can express N; submit a legal compatible cron whose time/day slots are used by the scheduleRule. Omit both for ordinary calendar cron schedules."
+                        },
+                        "interval": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 200,
+                            "description": "Integer interval from 1 to 200 paired with intervalUnit. The host carries the real interval via scheduleRule; the compatible cron is only a legal display expression. Must be set together with intervalUnit."
+                        }
+                    },
+                    "required": [
+                        "prompt",
+                        "title"
+                    ],
+                    "additionalProperties": false,
+                    "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "CronDelete",
+                "description": "Delete a scheduled automation from the current workspace by automation id.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Automation id returned by CronCreate or CronList"
+                        }
+                    },
+                    "required": [
+                        "id"
+                    ],
+                    "additionalProperties": false,
+                    "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "CronList",
+                "description": "List scheduled automations in the current workspace.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false,
+                    "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "CronUpdate",
+                "description": "Update selected definition fields of an existing scheduled automation in the current workspace while preserving its id and run history.\n\nUsage:\n- Use CronList first when the automation id is not already known. Never guess an automation id.\n- Always pass title on every CronUpdate. Rewrite it so it describes the task after the update and keeps the user's natural-language schedule phrase consistent with cron; for example, changing every 5 minutes to every 6 minutes must also update the title.\n- Apart from the required synchronized title, only pass fields the user asked to change. Omitted fields preserve their existing values.\n- Interpret cron in the user's local timezone using five fields: minute hour day-of-month month day-of-week. Do not convert to UTC.\n- To create or change every N minutes/hours/days/weeks/months/years, pass intervalUnit and interval together for every N-unit schedule. interval must be an integer from 1 to 200 even when cron could express N. Also pass a legal compatible cron with only the time/day/weekday/month slot; for example, every 40 days at 09:00 uses intervalUnit='daily', interval=40, cron='0 9 * * *'. Omit the pair only when preserving or using an ordinary calendar cron schedule.\n- Use numeric maxRuns only with recurring=false. Setting recurring=true clears any old finite limit automatically; never combine recurring=true with a numeric maxRuns.\n- CronUpdate cannot change workspace, session binding, model, provider, mode, thought level, run count, history, or enabled state.\n- Do not simulate an update by deleting and recreating the automation.\n- After a successful update, reply with only a brief confirmation. Do not restate the automation fields in a fenced code block or simulate a text file because the UI renders the updated automation card.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Automation id returned by CronCreate or CronList"
+                        },
+                        "cron": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Replacement standard 5-field cron expression in the user's local timezone. Omit to preserve the existing schedule. Do not convert to UTC."
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Replacement prompt for future scheduled fires. Omit to preserve the existing prompt."
+                        },
+                        "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Required synchronized automation title describing the task after this update. Keep the user's natural-language schedule phrase consistent with cron (for example, changing every 5 minutes to every 6 minutes must also change the title), and update the title when the prompt meaning changes."
+                        },
+                        "recurring": {
+                            "type": "boolean",
+                            "description": "Replacement recurrence mode. true repeats indefinitely and clears any old finite maxRuns limit; false is finite. Do not combine true with a numeric maxRuns."
+                        },
+                        "maxRuns": {
+                            "description": "Replacement maximum successful scheduled dispatch count for recurring=false. null clears the existing limit and is valid only when recurring=true is included in the same update; when recurring=true is supplied without maxRuns, the service clears the old limit automatically.",
+                            "oneOf": [
+                                {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0
+                                },
+                                {
+                                    "type": "null"
+                                }
+                            ]
+                        },
+                        "intervalUnit": {
+                            "type": "string",
+                            "enum": [
+                                "minute",
+                                "hourly",
+                                "daily",
+                                "weekly",
+                                "monthly",
+                                "yearly"
+                            ],
+                            "description": "Switch this automation to a long recurring interval whose step exceeds a cron field ceiling (hourly N>24, daily N>31, etc.). Pair with interval and submit a legal compatible cron (omit cron to keep the existing schedule's minute)."
+                        },
+                        "interval": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 200,
+                            "description": "Positive integer interval paired with intervalUnit. Must be set together with intervalUnit."
+                        }
+                    },
+                    "required": [
+                        "id",
+                        "title"
+                    ],
+                    "additionalProperties": false,
+                    "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "Edit",
                 "description": "Performs exact string replacement in a file.\n\n- You must Read the file in this conversation before editing, or the call will fail.\n- `old_string` must match the file exactly, including indentation, and be unique — the edit fails otherwise. Strip the Read line prefix (line number + tab) before matching.\n- `replace_all: true` replaces every occurrence instead.",
                 "parameters": {
@@ -265,7 +428,7 @@
             "type": "function",
             "function": {
                 "name": "EnterPlanMode",
-                "description": "Use this tool proactively when you're about to start a non-trivial implementation task. Getting user sign-off on your approach before writing code prevents wasted effort and ensures alignment. This tool transitions you into plan mode where you can explore the codebase and design an implementation approach for user approval.\n\n## When to Use This Tool\n\n**Prefer using EnterPlanMode** for implementation tasks unless they're simple. Use it when ANY of these conditions apply:\n\n1. **New Feature Implementation**: Adding meaningful new functionality\n   - Example: \"Add a logout button\" - where should it go? What should happen on click?\n   - Example: \"Add form validation\" - what rules? What error messages?\n\n2. **Multiple Valid Approaches**: The task can be solved in several different ways\n   - Example: \"Add caching to the API\" - could use Redis, in-memory, file-based, etc.\n   - Example: \"Improve performance\" - many optimization strategies possible\n\n3. **Code Modifications**: Changes that affect existing behavior or structure\n   - Example: \"Update the login flow\" - what exactly should change?\n   - Example: \"Refactor this component\" - what's the target architecture?\n\n4. **Architectural Decisions**: The task requires choosing between patterns or technologies\n   - Example: \"Add real-time updates\" - WebSockets vs SSE vs polling\n   - Example: \"Implement state management\" - Redux vs Context vs custom solution\n\n5. **Multi-File Changes**: The task will likely touch more than 2-3 files\n   - Example: \"Refactor the authentication system\"\n   - Example: \"Add a new API endpoint with tests\"\n\n6. **Unclear Requirements**: You need to explore before understanding the full scope\n   - Example: \"Make the app faster\" - need to profile and identify bottlenecks\n   - Example: \"Fix the bug in checkout\" - need to investigate root cause\n\n7. **User Preferences Matter**: The implementation could reasonably go multiple ways\n   - If you would use AskUserQuestion to clarify the approach, use EnterPlanMode instead\n   - Plan mode lets you explore first, then present options with context\n\n## When NOT to Use This Tool\n\nOnly skip EnterPlanMode for simple tasks:\n- Single-line or few-line fixes (typos, obvious bugs, small tweaks)\n- Adding a single function with clear requirements\n- Tasks where the user has given very specific, detailed instructions\n- Pure research/exploration tasks (use the Agent tool with explore agent instead)\n\n## What Happens in Plan Mode\n\nIn plan mode, you'll:\n1. Thoroughly explore the codebase using `find`/Glob, `grep`/Grep, and Read\n2. Understand existing patterns and architecture\n3. Design an implementation approach\n4. Present your plan to the user for approval\n5. Use AskUserQuestion if you need to clarify approaches\n6. Exit plan mode with ExitPlanMode when ready to implement\n\n## Examples\n\n### GOOD - Use EnterPlanMode:\nUser: \"Add user authentication to the app\"\n- Requires architectural decisions (session vs JWT, where to store tokens, middleware structure)\n\nUser: \"Optimize the database queries\"\n- Multiple approaches possible, need to profile first, significant impact\n\nUser: \"Implement dark mode\"\n- Architectural decision on theme system, affects many components\n\nUser: \"Add a delete button to the user profile\"\n- Seems simple but involves: where to place it, confirmation dialog, API call, error handling, state updates\n\nUser: \"Update the error handling in the API\"\n- Affects multiple files, user should approve the approach\n\n### BAD - Don't use EnterPlanMode:\nUser: \"Fix the typo in the README\"\n- Straightforward, no planning needed\n\nUser: \"Add a console.log to debug this function\"\n- Simple, obvious implementation\n\nUser: \"What files handle routing?\"\n- Research task, not implementation planning\n\n## Important Notes\n\n- This tool REQUIRES user approval - they must consent to entering plan mode\n- If unsure whether to use it, err on the side of planning - it's better to get alignment upfront than to redo work\n- Users appreciate being consulted before significant changes are made to their codebase\n",
+                "description": "Use this tool proactively when you're about to start a non-trivial implementation task. Getting user sign-off on your approach before writing code prevents wasted effort and ensures alignment. This tool transitions you into plan mode where you can explore the codebase and design an implementation approach for user approval.\n\n## When to Use This Tool\n\n**Prefer using EnterPlanMode** for implementation tasks unless they're simple. Use it when ANY of these conditions apply:\n\n1. **New Feature Implementation**: Adding meaningful new functionality\n   - Example: \"Add a logout button\" - where should it go? What should happen on click?\n   - Example: \"Add form validation\" - what rules? What error messages?\n\n2. **Multiple Valid Approaches**: The task can be solved in several different ways\n   - Example: \"Add caching to the API\" - could use Redis, in-memory, file-based, etc.\n   - Example: \"Improve performance\" - many optimization strategies possible\n\n3. **Code Modifications**: Changes that affect existing behavior or structure\n   - Example: \"Update the login flow\" - what exactly should change?\n   - Example: \"Refactor this component\" - what's the target architecture?\n\n4. **Architectural Decisions**: The task requires choosing between patterns or technologies\n   - Example: \"Add real-time updates\" - WebSockets vs SSE vs polling\n   - Example: \"Implement state management\" - Redux vs Context vs custom solution\n\n5. **Multi-File Changes**: The task will likely touch more than 2-3 files\n   - Example: \"Refactor the authentication system\"\n   - Example: \"Add a new API endpoint with tests\"\n\n6. **Unclear Requirements**: You need to explore before understanding the full scope\n   - Example: \"Make the app faster\" - need to profile and identify bottlenecks\n   - Example: \"Fix the bug in checkout\" - need to investigate root cause\n\n7. **User Preferences Matter**: The implementation could reasonably go multiple ways\n   - If you would use AskUserQuestion to clarify the approach, use EnterPlanMode instead\n   - Plan mode lets you explore first, then present options with context\n\n## When NOT to Use This Tool\n\nOnly skip EnterPlanMode for simple tasks:\n- Single-line or few-line fixes (typos, obvious bugs, small tweaks)\n- Adding a single function with clear requirements\n- Tasks where the user has given very specific, detailed instructions\n- Pure research/exploration tasks (use the Agent tool instead)\n\n## What Happens in Plan Mode\n\nIn plan mode, you'll:\n1. Thoroughly explore the codebase using `find`/Glob, `grep`/Grep, and Read\n2. Understand existing patterns and architecture\n3. Design an implementation approach\n4. Present your plan to the user for approval\n5. Use AskUserQuestion if you need to clarify approaches\n6. Exit plan mode with ExitPlanMode when ready to implement\n\n## Examples\n\n### GOOD - Use EnterPlanMode:\nUser: \"Add user authentication to the app\"\n- Requires architectural decisions (session vs JWT, where to store tokens, middleware structure)\n\nUser: \"Optimize the database queries\"\n- Multiple approaches possible, need to profile first, significant impact\n\nUser: \"Implement dark mode\"\n- Architectural decision on theme system, affects many components\n\nUser: \"Add a delete button to the user profile\"\n- Seems simple but involves: where to place it, confirmation dialog, API call, error handling, state updates\n\nUser: \"Update the error handling in the API\"\n- Affects multiple files, user should approve the approach\n\n### BAD - Don't use EnterPlanMode:\nUser: \"Fix the typo in the README\"\n- Straightforward, no planning needed\n\nUser: \"Add a console.log to debug this function\"\n- Simple, obvious implementation\n\nUser: \"What files handle routing?\"\n- Research task, not implementation planning\n\n## Important Notes\n\n- This tool REQUIRES user approval - they must consent to entering plan mode\n- If unsure whether to use it, err on the side of planning - it's better to get alignment upfront than to redo work\n- Users appreciate being consulted before significant changes are made to their codebase\n",
                 "parameters": {
                     "type": "object",
                     "properties": {},
@@ -326,7 +489,7 @@
             "type": "function",
             "function": {
                 "name": "Read",
-                "description": "Reads a file from the local filesystem.\n\n- `file_path` must be an absolute path.\n- Reads up to 2000 lines by default.\n- You can optionally specify a line offset and limit (especially handy for long files), but it's recommended to read the whole file by not providing these parameters\n- Results are returned using cat -n format, with line numbers starting at 1\n- Reads images (PNG, JPG, …) and presents them visually.\n- Reading a directory, a missing file, or an empty file returns an error or system reminder rather than content.\n- Do NOT re-read a file you just edited to verify — Edit/Write would have errored if the change failed, and the harness tracks file state for you.",
+                "description": "Reads a file from the local filesystem.\n\n- `file_path` must be an absolute path.\n- Reads up to 2000 lines by default.\n- You can optionally specify a line offset and limit (especially handy for long files), but it's recommended to read the whole file by not providing these parameters\n- Results are returned using cat -n format, with line numbers starting at 1\n- Reads images (PNG, JPG, …) and presents them visually.\n- Reads videos (MP4, MOV, WEBM, …) and presents them as video input (subject to ZCode's video input limit).\n- Reading a directory, a missing file, or an empty file returns an error or system reminder rather than content.\n- Do NOT re-read a file you just edited to verify — Edit/Write would have errored if the change failed, and the harness tracks file state for you.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -375,6 +538,63 @@
                     "required": [
                         "skill"
                     ],
+                    "additionalProperties": false,
+                    "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "TaskOutput",
+                "description": "DEPRECATED: Background tasks return their output file path in the tool result, and you receive a <task-notification> with the same path when the task completes.\n- For bash tasks: prefer using the Read tool on that output file path — it contains stdout/stderr.\n- For local_agent tasks: use the Agent tool result directly. Do NOT Read the .output file — it is a symlink to the full subagent conversation transcript (JSONL) and will overflow your context window.\n- For remote_agent tasks: prefer using the Read tool on the output file path — it contains the streamed remote session output (same as bash).\n\n- Retrieves output from a running or completed task (background shell, agent, or remote session)\n- Takes a task_id parameter identifying the task\n- Returns the task output along with status information\n- Use block=true (default) to wait for task completion\n- Use block=false for non-blocking check of current status\n- Task IDs can be found using the /tasks command\n- Works with all task types: background shells, async agents, and remote sessions",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "The task ID to get output from"
+                        },
+                        "block": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Whether to wait for completion"
+                        },
+                        "timeout": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 600000,
+                            "default": 30000,
+                            "description": "Max wait time in ms"
+                        }
+                    },
+                    "required": [
+                        "task_id",
+                        "block",
+                        "timeout"
+                    ],
+                    "additionalProperties": false,
+                    "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "TaskStop",
+                "description": "\n- Stops a running background task by its ID\n- Takes a task_id parameter identifying the task to stop\n- Returns a success or failure status\n- Use this tool when you need to terminate a long-running task\n",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "The ID of the background task to stop"
+                        },
+                        "shell_id": {
+                            "type": "string",
+                            "description": "Deprecated: use task_id instead"
+                        }
+                    },
                     "additionalProperties": false,
                     "$schema": "https://json-schema.org/draft/2020-12/schema"
                 }
@@ -504,8 +724,69 @@
         {
             "type": "function",
             "function": {
+                "name": "OffPeakCreate",
+                "description": "Create a one-off idle-time task in the current workspace: it takes a queue ticket immediately and later runs unattended in THIS session (with the full conversation history) when the server grants off-peak compute, at no plan-quota cost. There is no guaranteed start time. Unlike CronCreate (recurring or clock-scheduled work), use this for deferrable work the user wants done cheaply 'when compute is idle'. The prompt must describe the final work directly and must never ask the run to create, schedule, or configure another idle-time task or automation.\n\nUsage:\n- Use this only when the user explicitly asks for idle-time/off-peak execution (闲时任务/闲时执行/低峰跑), or explicitly accepts deferring the work to the free idle-time queue.\n- Choose CronCreate instead for anything time-scheduled or recurring ('every day at 9', 'in 10 minutes'). OffPeakCreate has no clock: the server decides when the task starts.\n- The task later continues THIS conversation unattended with the full history available, so prompt may refer to context already established here; still state the expected deliverable explicitly because nobody will answer questions during the run.\n- By default the task runs in full-automatic mode with the default allowed model at the highest reasoning level. Only set permissionMode/model/thoughtLevel when the user explicitly asks for confirmation-gated execution, a specific model, or a lower reasoning effort.\n- Do not include workspace paths or identities in the input; the current session workspace is used.\n- Keep title concise and task-descriptive without file paths.\n- Creation consumes a limited free take-number quota. If creation fails with a quota error, relay the limit to the user instead of retrying.\n- After a successful creation, reply with only a brief confirmation; the UI renders a task card with a link to the Automations page for edits.\n- Never call OffPeakCreate from within an idle-time task run, and never write a prompt asking the run to create more idle-time tasks or automations.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Concise idle-time task title describing the deferred work, for example '重构 utils 目录' or 'Fix flaky auth tests'. Keep it short and do not include file paths."
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Instructions for the deferred run, which later continues THIS conversation unattended with the full history available, so it may refer to context already established here. State the expected deliverable explicitly (nobody will answer questions during the run); never ask the run to create, schedule, or configure another idle-time task or automation."
+                        },
+                        "permissionMode": {
+                            "type": "string",
+                            "enum": [
+                                "build",
+                                "edit",
+                                "plan",
+                                "yolo"
+                            ],
+                            "description": "Unattended run permission mode. Omit for the default full-automatic mode (yolo). Set only when the user explicitly asks for confirmation-gated execution: 'build' pauses for approval before changes, 'edit' auto-applies edits, 'plan' is read-only planning."
+                        },
+                        "model": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Idle-plan model id. Must be one of the idle-time allowed models; omit to use the default (the newest allowed model). Set only when the user names a specific model."
+                        },
+                        "thoughtLevel": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Reasoning effort level for the chosen model. Omit to use the default (the highest level). Set only when the user explicitly asks for a lower reasoning effort."
+                        }
+                    },
+                    "required": [
+                        "title",
+                        "prompt"
+                    ],
+                    "additionalProperties": false,
+                    "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "OffPeakList",
+                "description": "List idle-time tasks in the current workspace with status and queue position. Read-only.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false,
+                    "$schema": "https://json-schema.org/draft/2020-12/schema"
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "SendMessage",
-                "description": "Send a message to a running local agent by agent id. Success only means the message was queued for the target local agent.\n\nUsage:\n- Use only for explicit local_agent coordination or handoff.\n- Do not claim the target agent has read, accepted, or replied to the message.\n- Include enough context for the target agent to understand the request.\n- Use { to, summary, message } with the agent id returned by the Agent tool.",
+                "description": "# SendMessage\n\nSend a message to another agent.\n\n```json\n{\"to\": \"agent_<uuid>\", \"summary\": \"assign task 1\", \"message\": \"start on task #1\"}\n```\n\nYour plain text output is NOT visible to other agents — to communicate, you MUST call this tool. Messages from agents are delivered automatically; you don't check an inbox. Refer to local agents by the `agentId` returned in the Agent spawn result. To resume a completed agent, use its `agentId`; it resumes in the background and you'll be notified when it finishes.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -513,19 +794,19 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 200,
-                            "description": "Target local agent id, such as agent_<uuid>."
+                            "description": "Recipient: local agent ID returned by Agent (format agent_<uuid>)."
                         },
                         "summary": {
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 200,
-                            "description": "Short summary of the message for logs and model-visible delivery status."
+                            "description": "A 5-10 word summary shown as a preview in the UI."
                         },
                         "message": {
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 20000,
-                            "description": "Message content to send to the target local agent."
+                            "description": "Plain text message content"
                         }
                     },
                     "required": [
@@ -581,8 +862,83 @@
                     "$schema": "https://json-schema.org/draft/2020-12/schema"
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "mcp__node_repl__js",
+                "description": "Browser Use only. Run JavaScript in a fresh Node-backed kernel with top-level await only as instructed by the Browser Use skill to control a browser. Do not use it as a general-purpose JavaScript runtime or for filesystem, shell, package inspection, data processing, or other non-browser work. Always provide the required `title` as a short user-facing description in the user's language without implementation terms. If `timeout_ms` is omitted, execution times out after 60000 ms. If the code may take more than 30000 ms including all awaited operations, you MUST set `timeout_ms` to at least the estimated total runtime plus 15000 ms; split the work into multiple calls if that exceeds the 120000 ms maximum. Use `nodeRepl.cwd`, `nodeRepl.homeDir`, `nodeRepl.tmpDir`, `nodeRepl.requestMeta`, `nodeRepl.setResponseMeta(meta)`, `nodeRepl.write(value)`, and `await nodeRepl.emitImage(imageLike)`. Global bindings and module cache do not persist across calls. Use dynamic imports such as `await import(\"pkg\")` and bootstrap Browser Use in every call.",
+                "parameters": {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "JavaScript code to execute in the Node REPL session"
+                        },
+                        "timeout_ms": {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 120000,
+                            "description": "Per-call timeout in milliseconds. You MUST provide this when the code is expected to run longer than 30000 ms, including all awaited operations. Set it to at least the estimated total runtime plus 15000 ms. If that exceeds the 120000 ms maximum, split the work into multiple calls."
+                        },
+                        "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120,
+                            "description": "Required short user-facing title in the user's language that describes the intended action without implementation terms such as js, JavaScript, or node_repl"
+                        }
+                    },
+                    "required": [
+                        "code",
+                        "title"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "mcp__node_repl__js_add_node_module_dir",
+                "description": "Browser Use only. Add an absolute `node_modules` directory supplied by the Browser Use skill to the current session's Node module search roots for future fresh calls. The directory stays available after `js_reset`. Returns true when newly added and false when already present.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Absolute path to a node_modules directory."
+                        }
+                    },
+                    "required": [
+                        "path"
+                    ],
+                    "additionalProperties": false
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "mcp__node_repl__js_reset",
+                "description": "Browser Use only. Compatibility barrier for callers that still request a JavaScript kernel reset. Every `js` call already starts in a fresh kernel, so this does not clear per-session module search roots.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false
+                }
+            }
         }
     ],
     "tool_choice": "auto",
-    "stream": true
+    "stream": true,
+    "stream_options": {
+        "include_usage": true
+    },
+    "thinking": {
+        "type": "enabled"
+    },
+    "reasoning_effort": "max",
+    "max_completion_tokens": 384000
 }
